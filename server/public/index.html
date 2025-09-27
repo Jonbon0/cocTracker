@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Clash of Clans Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; padding: 20px; background: #f0f2f5; }
+  h1 { text-align: center; margin-bottom: 20px; }
+  canvas { background: #fff; margin-bottom: 40px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+</style>
+</head>
+<body>
+<h1>Clan Tracker</h1>
+
+<h2>Summary Chart</h2>
+<canvas id="summaryChart" width="800" height="400"></canvas>
+
+<h2>Individual Metrics</h2>
+<canvas id="membersChart" width="800" height="300"></canvas>
+<canvas id="clanPointsChart" width="800" height="300"></canvas>
+<canvas id="clanLevelChart" width="800" height="300"></canvas>
+<canvas id="capitalPointsChart" width="800" height="300"></canvas>
+
+<script>
+async function fetchSnapshots() {
+  const res = await fetch('/api/snapshots');
+  return await res.json();
+}
+
+// Convert timestamp to YYYY-MM-DD (day only)
+function getDayLabels(data) {
+  return data.map(d => new Date(d.timestamp).toISOString().split('T')[0]);
+}
+
+function renderChart(canvasId, label, data, color, field) {
+  return new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: {
+      labels: getDayLabels(data),
+      datasets: [{
+        label,
+        data: data.map(d => d[field]),
+        borderColor: color,
+        backgroundColor: color + '33',
+        fill: true,
+        tension: 0.2,
+        pointRadius: 4,
+        pointHoverRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: true, position: 'top' },
+        tooltip: { enabled: true, mode: 'index', intersect: false }
+      },
+      scales: {
+        y: { beginAtZero: true, grid: { color: '#ddd' }, title: { display: true, text: label } },
+        x: { grid: { color: '#ddd' }, title: { display: true, text: 'Date' } }
+      }
+    }
+  });
+}
+
+async function updateCharts() {
+  const data = await fetchSnapshots();
+  
+  // Safely destroy existing charts
+  if (window.charts) {
+    window.charts.forEach(c => {
+      if (c && typeof c.destroy === 'function') c.destroy();
+    });
+  }
+  if (window.summaryChart && typeof window.summaryChart.destroy === 'function') {
+    window.summaryChart.destroy();
+  }
+
+  // Individual charts
+  window.charts = [
+    renderChart('membersChart', 'Members', data, '#007bff', 'members'),
+    renderChart('clanPointsChart', 'Clan Points', data, '#28a745', 'clanPoints'),
+    renderChart('clanLevelChart', 'Clan Level', data, '#ffc107', 'clanLevel'),
+    renderChart('capitalPointsChart', 'Capital Points', data, '#dc3545', 'clanCapitalPoints'),
+  ];
+
+  // Combined summary chart
+  const summaryCtx = document.getElementById('summaryChart').getContext('2d');
+  window.summaryChart = new Chart(summaryCtx, {
+    type: 'line',
+    data: {
+      labels: getDayLabels(data),
+      datasets: [
+        { 
+          label: 'Members', 
+          data: data.map(d => d.members), 
+          borderColor: '#007bff', 
+          fill: false, 
+          tension: 0.2,
+          yAxisID: 'y1'
+        },
+        { 
+          label: 'Clan Points', 
+          data: data.map(d => d.clanPoints), 
+          borderColor: '#28a745', 
+          fill: false, 
+          tension: 0.2,
+          yAxisID: 'y2'
+        },
+        { 
+          label: 'Clan Level', 
+          data: data.map(d => d.clanLevel), 
+          borderColor: '#ffc107', 
+          fill: false, 
+          tension: 0.2,
+          yAxisID: 'y1'
+        },
+        { 
+          label: 'Capital Points', 
+          data: data.map(d => d.clanCapitalPoints), 
+          borderColor: '#dc3545', 
+          fill: false, 
+          tension: 0.2,
+          yAxisID: 'y2'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { 
+        legend: { position: 'top' }, 
+        tooltip: { mode: 'index', intersect: false }
+      },
+      scales: {
+        y1: { 
+          type: 'linear',
+          display: true,
+          position: 'left',
+          title: { display: true, text: 'Members & Level' },
+          grid: { color: '#ddd' },
+          beginAtZero: true
+        },
+        y2: { 
+          type: 'linear',
+          display: true,
+          position: 'right',
+          title: { display: true, text: 'Points' },
+          grid: { display: false },
+          beginAtZero: true
+        },
+        x: { 
+          title: { display: true, text: 'Date' }, 
+          grid: { color: '#ddd' } 
+        }
+      }
+    }
+  });
+}
+
+// Initial render
+updateCharts();
+// Refresh every 1 minute
+setInterval(updateCharts, 60 * 1000);
+</script>
+</body>
+</html>
