@@ -1,149 +1,109 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>CoC Clan Tracker</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f8f9fa;
-      margin: 0;
-      padding: 20px;
-      max-width: 900px;
-      margin-left: auto;
-      margin-right: auto;
-    }
-    h1 {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-    .chart-container {
-      background: white;
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 30px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    canvas {
-      width: 100% !important;
-      height: 300px !important;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>Clash of Clans Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; padding: 20px; background: #f0f2f5; }
+  h1 { text-align: center; margin-bottom: 20px; }
+  canvas { background: #fff; margin-bottom: 40px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+</style>
 </head>
 <body>
-  <h1>Clash of Clans Clan Tracker</h1>
+<h1>Clan Tracker</h1>
 
-  <div class="chart-container">
-    <h3>Members Count</h3>
-    <canvas id="membersChart"></canvas>
-  </div>
+<h2>Summary Chart</h2>
+<canvas id="summaryChart" width="800" height="400"></canvas>
 
-  <div class="chart-container">
-    <h3>Clan Points (Trophies)</h3>
-    <canvas id="pointsChart"></canvas>
-  </div>
+<h2>Individual Metrics</h2>
+<canvas id="membersChart" width="800" height="300"></canvas>
+<canvas id="clanPointsChart" width="800" height="300"></canvas>
+<canvas id="clanLevelChart" width="800" height="300"></canvas>
+<canvas id="capitalPointsChart" width="800" height="300"></canvas>
 
-  <div class="chart-container">
-    <h3>Clan XP (approx from level)</h3>
-    <canvas id="xpChart"></canvas>
-  </div>
+<script>
+async function fetchSnapshots() {
+  const res = await fetch('/api/snapshots');
+  return await res.json();
+}
 
-  <div class="chart-container">
-    <h3>War Record (Wins vs Losses)</h3>
-    <canvas id="warsChart"></canvas>
-  </div>
+// Convert timestamp to YYYY-MM-DD (day only)
+function getDayLabels(data) {
+  return data.map(d => new Date(d.timestamp).toISOString().split('T')[0]);
+}
 
-  <script>
-    let membersChart, pointsChart, xpChart, warsChart;
-
-    async function fetchData() {
-      try {
-        const res = await fetch("/api/snapshots");
-        const snapshots = await res.json();
-
-        if (!snapshots.length) return;
-
-        // Format X axis as days
-        const labels = snapshots.map(s => 
-          new Date(s.timestamp).toLocaleDateString()
-        );
-
-        const members = snapshots.map(s => s.members_count);
-        const points = snapshots.map(s => s.clan_points);
-        const xp = snapshots.map(s => s.clan_level * 1000);
-        const warWins = snapshots.map(s => s.war_wins);
-        const warLosses = snapshots.map(s => s.war_losses);
-
-        // Destroy old charts before re-rendering
-        if (membersChart) membersChart.destroy();
-        if (pointsChart) pointsChart.destroy();
-        if (xpChart) xpChart.destroy();
-        if (warsChart) warsChart.destroy();
-
-        // Members chart
-        membersChart = new Chart(document.getElementById("membersChart"), {
-          type: "line",
-          data: {
-            labels,
-            datasets: [{
-              label: "Members",
-              data: members,
-              borderColor: "blue",
-              fill: false
-            }]
-          }
-        });
-
-        // Points chart
-        pointsChart = new Chart(document.getElementById("pointsChart"), {
-          type: "line",
-          data: {
-            labels,
-            datasets: [{
-              label: "Clan Points",
-              data: points,
-              borderColor: "green",
-              fill: false
-            }]
-          }
-        });
-
-        // XP chart
-        xpChart = new Chart(document.getElementById("xpChart"), {
-          type: "line",
-          data: {
-            labels,
-            datasets: [{
-              label: "Clan XP (approx)",
-              data: xp,
-              borderColor: "orange",
-              fill: false
-            }]
-          }
-        });
-
-        // War wins/losses chart
-        warsChart = new Chart(document.getElementById("warsChart"), {
-          type: "line",
-          data: {
-            labels,
-            datasets: [
-              { label: "War Wins", data: warWins, borderColor: "purple", fill: false },
-              { label: "War Losses", data: warLosses, borderColor: "red", fill: false }
-            ]
-          }
-        });
-
-      } catch (err) {
-        console.error("Error loading snapshots:", err);
+function renderChart(canvasId, label, data, color, field) {
+  return new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: {
+      labels: getDayLabels(data),
+      datasets: [{
+        label,
+        data: data.map(d => d[field]),
+        borderColor: color,
+        backgroundColor: color + '33',
+        fill: true,
+        tension: 0.2,
+        pointRadius: 4,
+        pointHoverRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: true, position: 'top' },
+        tooltip: { enabled: true, mode: 'index', intersect: false }
+      },
+      scales: {
+        y: { beginAtZero: true, grid: { color: '#ddd' }, title: { display: true, text: label } },
+        x: { grid: { color: '#ddd' }, title: { display: true, text: 'Date' } }
       }
     }
+  });
+}
 
-    // Load immediately and refresh every 60 seconds
-    fetchData();
-    setInterval(fetchData, 60000);
-  </script>
+async function updateCharts() {
+  const data = await fetchSnapshots();
+  if (window.charts) window.charts.forEach(c => c.destroy());
+
+  // Individual charts
+  window.charts = [
+    renderChart('membersChart', 'Members', data, '#007bff', 'members'),
+    renderChart('clanPointsChart', 'Clan Points', data, '#28a745', 'clanPoints'),
+    renderChart('clanLevelChart', 'Clan Level', data, '#ffc107', 'clanLevel'),
+    renderChart('capitalPointsChart', 'Capital Points', data, '#dc3545', 'clanCapitalPoints'),
+  ];
+
+  // Combined summary chart
+  const summaryCtx = document.getElementById('summaryChart').getContext('2d');
+  if (window.summaryChart) window.summaryChart.destroy();
+  window.summaryChart = new Chart(summaryCtx, {
+    type: 'line',
+    data: {
+      labels: getDayLabels(data),
+      datasets: [
+        { label: 'Members', data: data.map(d => d.members), borderColor: '#007bff', fill: false, tension: 0.2 },
+        { label: 'Clan Points', data: data.map(d => d.clanPoints), borderColor: '#28a745', fill: false, tension: 0.2 },
+        { label: 'Clan Level', data: data.map(d => d.clanLevel), borderColor: '#ffc107', fill: false, tension: 0.2 },
+        { label: 'Capital Points', data: data.map(d => d.clanCapitalPoints), borderColor: '#dc3545', fill: false, tension: 0.2 }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'top' }, tooltip: { mode: 'index', intersect: false } },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'Value' }, grid: { color: '#ddd' } },
+        x: { title: { display: true, text: 'Date' }, grid: { color: '#ddd' } }
+      }
+    }
+  });
+}
+
+// Initial render
+updateCharts();
+// Refresh every 1 minute
+setInterval(updateCharts, 60 * 1000);
+</script>
 </body>
 </html>

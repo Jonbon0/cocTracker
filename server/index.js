@@ -9,45 +9,37 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 const COC_API_KEY = process.env.COC_API_KEY;
-const CLAN_TAG = process.env.CLAN_TAG; // now coming from .env
+const CLAN_TAG = process.env.CLAN_TAG;
+const API_URL = "https://api.clashofclans.com/v1";
 
-if (!COC_API_KEY) {
-  throw new Error("COC_API_KEY is not set in .env");
-}
-
-if (!CLAN_TAG) {
-  throw new Error("CLAN_TAG is not set in .env");
-}
+if (!COC_API_KEY) throw new Error("COC_API_KEY is not set in .env");
+if (!CLAN_TAG) throw new Error("CLAN_TAG is not set in .env");
 
 async function fetchClanData() {
   try {
-    const response = await fetch(
-      `https://api.clashofclans.com/v1/clans/${encodeURIComponent(CLAN_TAG)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${COC_API_KEY}`,
-        },
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API Error: ${response.status} ${errorText}`);
-    }
-
-    const data = await response.json();
-
-    // Save snapshot
-    await insertSnapshot({
-      timestamp: new Date().toISOString(),
-      members: data.members,
-      clanPoints: data.clanPoints,
-      clanLevel: data.clanLevel,
-      clanVersusPoints: data.clanVersusPoints,
-      clanCapitalPoints: data.clanCapitalPoints,
+    const response = await fetch(`${API_URL}/clans/${encodeURIComponent(CLAN_TAG)}`, {
+      headers: { Authorization: `Bearer ${COC_API_KEY}` },
     });
 
-    console.log("Snapshot saved:", data.name, "Members:", data.members);
+    if (!response.ok) throw new Error(`API Error: ${response.status} ${response.statusText}`);
+
+    const clan = await response.json();
+
+    insertSnapshot({
+      timestamp: new Date().toISOString(),
+      members: clan.members,
+      clanPoints: clan.clanPoints,
+      clanLevel: clan.clanLevel,
+      clanCapitalPoints: clan.clanCapitalPoints
+    });
+
+    console.log("✅ Snapshot saved:", {
+      name: clan.name,
+      members: clan.members,
+      clanPoints: clan.clanPoints,
+      clanLevel: clan.clanLevel,
+      clanCapitalPoints: clan.clanCapitalPoints,
+    });
   } catch (err) {
     console.error("Error saving snapshot:", err.message);
   }
@@ -55,15 +47,14 @@ async function fetchClanData() {
 
 // Fetch every 1 minute
 setInterval(fetchClanData, 60 * 1000);
-
-// Run immediately on startup
+// Run immediately
 fetchClanData();
 
 app.use(express.static("public"));
 
 app.get("/api/snapshots", async (req, res) => {
   try {
-    const snapshots = await getAllSnapshots();
+    const snapshots = getAllSnapshots();
     res.json(snapshots);
   } catch (err) {
     res.status(500).json({ error: "Failed to get snapshots" });
