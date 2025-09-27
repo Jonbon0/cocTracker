@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Clash of Clans Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .chart-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+
+    canvas {
+      width: 100% !important;
+      height: 250px !important;
+    }
+  </style>
+</head>
+<body>
+  <h1>Clash of Clans Tracker</h1>
+
+  <div class="chart-grid">
+    <canvas id="membersChart"></canvas>
+    <canvas id="clanPointsChart"></canvas>
+    <canvas id="warChart"></canvas>
+    <canvas id="clanLevelChart"></canvas>
+    <canvas id="requiredTrophiesChart"></canvas>
+  </div>
+
+  <script>
+    const API_URL = '/api/snapshots';
+    let charts = {};
+
+    async function fetchSnapshots() {
+      try {
+        const res = await fetch(API_URL);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        return data;
+      } catch (err) {
+        console.error("Error fetching snapshots:", err);
+        return [];
+      }
+    }
+
+    function formatChartDataByDay(snapshots, key) {
+      const dayMap = {};
+
+      snapshots.forEach(s => {
+        const day = new Date(s.timestamp).toLocaleDateString();
+        if (!dayMap[day]) dayMap[day] = [];
+        dayMap[day].push(Number(s[key] ?? 0));
+      });
+
+      const labels = Object.keys(dayMap);
+      const data = labels.map(day => {
+        const values = dayMap[day];
+        return Math.round(values.reduce((a, b) => a + b, 0) / values.length); // average per day
+      });
+
+      return { labels, data };
+    }
+
+    function createCharts(snapshots) {
+      const membersData = formatChartDataByDay(snapshots, 'members_count');
+      const pointsData = formatChartDataByDay(snapshots, 'clan_points');
+      const warWinsData = formatChartDataByDay(snapshots, 'war_wins');
+      const warLossesData = formatChartDataByDay(snapshots, 'war_losses');
+      const levelData = formatChartDataByDay(snapshots, 'clan_level');
+      const requiredTrophiesData = formatChartDataByDay(snapshots, 'required_trophies');
+
+      charts.members = new Chart(document.getElementById('membersChart'), {
+        type: 'line',
+        data: {
+          labels: membersData.labels,
+          datasets: [{ label: 'Members Count', data: membersData.data, borderColor: 'blue', fill: false }]
+        }
+      });
+
+      charts.points = new Chart(document.getElementById('clanPointsChart'), {
+        type: 'line',
+        data: {
+          labels: pointsData.labels,
+          datasets: [{ label: 'Clan Points', data: pointsData.data, borderColor: 'green', fill: false }]
+        }
+      });
+
+      charts.wars = new Chart(document.getElementById('warChart'), {
+        type: 'line',
+        data: {
+          labels: warWinsData.labels,
+          datasets: [
+            { label: 'War Wins', data: warWinsData.data, borderColor: 'purple', fill: false },
+            { label: 'War Losses', data: warLossesData.data, borderColor: 'red', fill: false }
+          ]
+        }
+      });
+
+      charts.level = new Chart(document.getElementById('clanLevelChart'), {
+        type: 'line',
+        data: {
+          labels: levelData.labels,
+          datasets: [{ label: 'Clan Level', data: levelData.data, borderColor: 'orange', fill: false }]
+        }
+      });
+
+      charts.required = new Chart(document.getElementById('requiredTrophiesChart'), {
+        type: 'line',
+        data: {
+          labels: requiredTrophiesData.labels,
+          datasets: [{ label: 'Required Trophies', data: requiredTrophiesData.data, borderColor: 'brown', fill: false }]
+        }
+      });
+    }
+
+    async function updateCharts() {
+      const snapshots = await fetchSnapshots();
+      if (!snapshots.length) return;
+
+      if (!charts.members) {
+        createCharts(snapshots);
+      } else {
+        const updates = [
+          { key: 'members_count', chart: charts.members },
+          { key: 'clan_points', chart: charts.points },
+          { key: 'war_wins', chart: charts.wars, secondary: 'war_losses' },
+          { key: 'clan_level', chart: charts.level },
+          { key: 'required_trophies', chart: charts.required }
+        ];
+
+        updates.forEach(u => {
+          const primary = formatChartDataByDay(snapshots, u.key);
+          u.chart.data.labels = primary.labels;
+          u.chart.data.datasets[0].data = primary.data;
+
+          if (u.secondary) {
+            const secondary = formatChartDataByDay(snapshots, u.secondary);
+            u.chart.data.datasets[1].data = secondary.data;
+          }
+
+          u.chart.update();
+        });
+      }
+    }
+
+    updateCharts();
+    setInterval(updateCharts, 60 * 1000); // update every 1 minute
+  </script>
+</body>
+</html>
