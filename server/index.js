@@ -1,57 +1,75 @@
-// index.js
-import 'dotenv/config';
-import express from 'express';
-import cors from 'cors';
-import cron from 'node-cron';
-import { fetchClan } from './fetchClan.js';
-import db from './db.js'; // Make sure db.js exports insertSnapshot, getLatestSnapshot, getSnapshots
+import express from "express";
+import fetch from "node-fetch";
+import dotenv from "dotenv";
+import { insertSnapshot, getAllSnapshots } from "./db.js";
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static('public')); // Serve frontend files
+const COC_API_KEY = process.env.COC_API_KEY;
+const CLAN_TAG = process.env.CLAN_TAG; // now coming from .env
 
-const CLAN_TAG = process.env.CLAN_TAG;
-
-if (!CLAN_TAG) {
-  console.error('Error: CLAN_TAG not set in .env');
-  process.exit(1);
+if (!COC_API_KEY) {
+  throw new Error("COC_API_KEY is not set in .env");
 }
 
-// Fetch and store clan snapshot
-async function updateClanData() {
-  const snapshot = await fetchClan(CLAN_TAG);
-  if (snapshot) {
-    db.insertSnapshot(snapshot);
-    console.log(
-      `Snapshot saved: ${snapshot.clanName} (${new Date(snapshot.timestamp).toLocaleTimeString()})`
+if (!CLAN_TAG) {
+  throw new Error("CLAN_TAG is not set in .env");
+}
+
+async function fetchClanData() {
+  try {
+    const response = await fetch(
+      `https://api.clashofclans.com/v1/clans/${encodeURIComponent(CLAN_TAG)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${COC_API_KEY}`,
+        },
+      }
     );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API Error: ${response.status} ${errorText}`);
+    }
+
+    const data = await response.json();
+
+    // Save snapshot
+    await insertSnapshot({
+      timestamp: new Date().toISOString(),
+      members: data.members,
+      clanPoints: data.clanPoints,
+      clanLevel: data.clanLevel,
+      clanVersusPoints: data.clanVersusPoints,
+      clanCapitalPoints: data.clanCapitalPoints,
+    });
+
+    console.log("Snapshot saved:", data.name, "Members:", data.members);
+  } catch (err) {
+    console.error("Error saving snapshot:", err.message);
   }
 }
 
-// Schedule automatic fetch every 1 minute
-cron.schedule('*/1 * * * *', () => {
-  console.log('Fetching clan data...');
-  updateClanData();
+// Fetch every 1 minute
+setInterval(fetchClanData, 60 * 1000);
+
+// Run immediately on startup
+fetchClanData();
+
+app.use(express.static("public"));
+
+app.get("/api/snapshots", async (req, res) => {
+  try {
+    const snapshots = await getAllSnapshots();
+    res.json(snapshots);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to get snapshots" });
+  }
 });
 
-// API route to get latest snapshot
-app.get('/api/latest', (req, res) => {
-  const data = db.getLatestSnapshot(CLAN_TAG);
-  if (!data) return res.status(404).json({ error: 'No data found' });
-  res.json(data);
-});
-
-// API route to get multiple snapshots for charts
-app.get('/api/snapshots', (req, res) => {
-  const data = db.getSnapshots(CLAN_TAG);
-  res.json(data);
-});
-
-// Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  updateClanData(); // Initial fetch immediately on startup
 });

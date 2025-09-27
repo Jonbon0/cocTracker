@@ -1,45 +1,36 @@
-import Database from 'better-sqlite3';
-const db = new Database('./clan_tracker.db');
+import Database from "better-sqlite3";
 
-// migrations
-db.exec(`
-CREATE TABLE IF NOT EXISTS clan_snapshots (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  timestamp INTEGER NOT NULL,
-  clan_tag TEXT,
-  clan_name TEXT,
-  clan_level INTEGER,
-  clan_points INTEGER,
-  required_trophies INTEGER,
-  members_count INTEGER,
-  war_wins INTEGER,
-  war_losses INTEGER,
-  json_blob TEXT
-);
-`);
+const db = new Database("clanTracker.db");
 
-export default {
-  insertSnapshot: (snapshot) => {
-    const stmt = db.prepare(`INSERT INTO clan_snapshots
-      (timestamp, clan_tag, clan_name, clan_level, clan_points, required_trophies, members_count, war_wins, war_losses, json_blob)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    return stmt.run(
-      snapshot.timestamp,
-      snapshot.clanTag,
-      snapshot.clanName,
-      snapshot.clanLevel,
-      snapshot.clanPoints,
-      snapshot.requiredTrophies,
-      snapshot.membersCount,
-      snapshot.warWins,
-      snapshot.warLosses,
-      JSON.stringify(snapshot.raw)
-    );
-  },
-  getLatestSnapshot: (clanTag) => {
-    return db.prepare(`SELECT * FROM clan_snapshots WHERE clan_tag = ? ORDER BY timestamp DESC LIMIT 1`).get(clanTag);
-  },
-  getSnapshots: (clanTag, limit = 200) => {
-    return db.prepare(`SELECT * FROM clan_snapshots WHERE clan_tag = ? ORDER BY timestamp DESC LIMIT ?`).all(clanTag, limit);
-  }
-};
+// Create table if it doesn’t exist
+db.prepare(
+  `CREATE TABLE IF NOT EXISTS snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT,
+    members INTEGER,
+    clanPoints INTEGER,
+    clanLevel INTEGER,
+    clanVersusPoints INTEGER,
+    clanCapitalPoints INTEGER
+  )`
+).run();
+
+export function insertSnapshot(snapshot) {
+  const stmt = db.prepare(
+    `INSERT INTO snapshots (timestamp, members, clanPoints, clanLevel, clanVersusPoints, clanCapitalPoints)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  );
+  stmt.run(
+    snapshot.timestamp,
+    snapshot.members,
+    snapshot.clanPoints,
+    snapshot.clanLevel,
+    snapshot.clanVersusPoints,
+    snapshot.clanCapitalPoints
+  );
+}
+
+export function getAllSnapshots() {
+  const stmt = db.prepare(`SELECT * FROM snapshots ORDER BY timestamp ASC`);
+  return stmt.all();
+}

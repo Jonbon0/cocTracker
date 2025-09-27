@@ -1,161 +1,149 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Clash of Clans Tracker</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CoC Clan Tracker</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
-      margin: 20px;
+      background: #f8f9fa;
+      margin: 0;
+      padding: 20px;
+      max-width: 900px;
+      margin-left: auto;
+      margin-right: auto;
     }
-
     h1 {
       text-align: center;
       margin-bottom: 30px;
     }
-
-    .chart-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 20px;
+    .chart-container {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
-
     canvas {
       width: 100% !important;
-      height: 250px !important;
+      height: 300px !important;
     }
   </style>
 </head>
 <body>
-  <h1>Clash of Clans Tracker</h1>
+  <h1>Clash of Clans Clan Tracker</h1>
 
-  <div class="chart-grid">
+  <div class="chart-container">
+    <h3>Members Count</h3>
     <canvas id="membersChart"></canvas>
-    <canvas id="clanPointsChart"></canvas>
-    <canvas id="warChart"></canvas>
-    <canvas id="clanLevelChart"></canvas>
-    <canvas id="requiredTrophiesChart"></canvas>
+  </div>
+
+  <div class="chart-container">
+    <h3>Clan Points (Trophies)</h3>
+    <canvas id="pointsChart"></canvas>
+  </div>
+
+  <div class="chart-container">
+    <h3>Clan XP (approx from level)</h3>
+    <canvas id="xpChart"></canvas>
+  </div>
+
+  <div class="chart-container">
+    <h3>War Record (Wins vs Losses)</h3>
+    <canvas id="warsChart"></canvas>
   </div>
 
   <script>
-    const API_URL = '/api/snapshots';
-    let charts = {};
+    let membersChart, pointsChart, xpChart, warsChart;
 
-    async function fetchSnapshots() {
+    async function fetchData() {
       try {
-        const res = await fetch(API_URL);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        return data;
-      } catch (err) {
-        console.error("Error fetching snapshots:", err);
-        return [];
-      }
-    }
+        const res = await fetch("/api/snapshots");
+        const snapshots = await res.json();
 
-    function formatChartDataByDay(snapshots, key) {
-      const dayMap = {};
+        if (!snapshots.length) return;
 
-      snapshots.forEach(s => {
-        const day = new Date(s.timestamp).toLocaleDateString();
-        if (!dayMap[day]) dayMap[day] = [];
-        dayMap[day].push(Number(s[key] ?? 0));
-      });
+        // Format X axis as days
+        const labels = snapshots.map(s => 
+          new Date(s.timestamp).toLocaleDateString()
+        );
 
-      const labels = Object.keys(dayMap);
-      const data = labels.map(day => {
-        const values = dayMap[day];
-        return Math.round(values.reduce((a, b) => a + b, 0) / values.length); // average per day
-      });
+        const members = snapshots.map(s => s.members_count);
+        const points = snapshots.map(s => s.clan_points);
+        const xp = snapshots.map(s => s.clan_level * 1000);
+        const warWins = snapshots.map(s => s.war_wins);
+        const warLosses = snapshots.map(s => s.war_losses);
 
-      return { labels, data };
-    }
+        // Destroy old charts before re-rendering
+        if (membersChart) membersChart.destroy();
+        if (pointsChart) pointsChart.destroy();
+        if (xpChart) xpChart.destroy();
+        if (warsChart) warsChart.destroy();
 
-    function createCharts(snapshots) {
-      const membersData = formatChartDataByDay(snapshots, 'members_count');
-      const pointsData = formatChartDataByDay(snapshots, 'clan_points');
-      const warWinsData = formatChartDataByDay(snapshots, 'war_wins');
-      const warLossesData = formatChartDataByDay(snapshots, 'war_losses');
-      const levelData = formatChartDataByDay(snapshots, 'clan_level');
-      const requiredTrophiesData = formatChartDataByDay(snapshots, 'required_trophies');
-
-      charts.members = new Chart(document.getElementById('membersChart'), {
-        type: 'line',
-        data: {
-          labels: membersData.labels,
-          datasets: [{ label: 'Members Count', data: membersData.data, borderColor: 'blue', fill: false }]
-        }
-      });
-
-      charts.points = new Chart(document.getElementById('clanPointsChart'), {
-        type: 'line',
-        data: {
-          labels: pointsData.labels,
-          datasets: [{ label: 'Clan Points', data: pointsData.data, borderColor: 'green', fill: false }]
-        }
-      });
-
-      charts.wars = new Chart(document.getElementById('warChart'), {
-        type: 'line',
-        data: {
-          labels: warWinsData.labels,
-          datasets: [
-            { label: 'War Wins', data: warWinsData.data, borderColor: 'purple', fill: false },
-            { label: 'War Losses', data: warLossesData.data, borderColor: 'red', fill: false }
-          ]
-        }
-      });
-
-      charts.level = new Chart(document.getElementById('clanLevelChart'), {
-        type: 'line',
-        data: {
-          labels: levelData.labels,
-          datasets: [{ label: 'Clan Level', data: levelData.data, borderColor: 'orange', fill: false }]
-        }
-      });
-
-      charts.required = new Chart(document.getElementById('requiredTrophiesChart'), {
-        type: 'line',
-        data: {
-          labels: requiredTrophiesData.labels,
-          datasets: [{ label: 'Required Trophies', data: requiredTrophiesData.data, borderColor: 'brown', fill: false }]
-        }
-      });
-    }
-
-    async function updateCharts() {
-      const snapshots = await fetchSnapshots();
-      if (!snapshots.length) return;
-
-      if (!charts.members) {
-        createCharts(snapshots);
-      } else {
-        const updates = [
-          { key: 'members_count', chart: charts.members },
-          { key: 'clan_points', chart: charts.points },
-          { key: 'war_wins', chart: charts.wars, secondary: 'war_losses' },
-          { key: 'clan_level', chart: charts.level },
-          { key: 'required_trophies', chart: charts.required }
-        ];
-
-        updates.forEach(u => {
-          const primary = formatChartDataByDay(snapshots, u.key);
-          u.chart.data.labels = primary.labels;
-          u.chart.data.datasets[0].data = primary.data;
-
-          if (u.secondary) {
-            const secondary = formatChartDataByDay(snapshots, u.secondary);
-            u.chart.data.datasets[1].data = secondary.data;
+        // Members chart
+        membersChart = new Chart(document.getElementById("membersChart"), {
+          type: "line",
+          data: {
+            labels,
+            datasets: [{
+              label: "Members",
+              data: members,
+              borderColor: "blue",
+              fill: false
+            }]
           }
-
-          u.chart.update();
         });
+
+        // Points chart
+        pointsChart = new Chart(document.getElementById("pointsChart"), {
+          type: "line",
+          data: {
+            labels,
+            datasets: [{
+              label: "Clan Points",
+              data: points,
+              borderColor: "green",
+              fill: false
+            }]
+          }
+        });
+
+        // XP chart
+        xpChart = new Chart(document.getElementById("xpChart"), {
+          type: "line",
+          data: {
+            labels,
+            datasets: [{
+              label: "Clan XP (approx)",
+              data: xp,
+              borderColor: "orange",
+              fill: false
+            }]
+          }
+        });
+
+        // War wins/losses chart
+        warsChart = new Chart(document.getElementById("warsChart"), {
+          type: "line",
+          data: {
+            labels,
+            datasets: [
+              { label: "War Wins", data: warWins, borderColor: "purple", fill: false },
+              { label: "War Losses", data: warLosses, borderColor: "red", fill: false }
+            ]
+          }
+        });
+
+      } catch (err) {
+        console.error("Error loading snapshots:", err);
       }
     }
 
-    updateCharts();
-    setInterval(updateCharts, 60 * 1000); // update every 1 minute
+    // Load immediately and refresh every 60 seconds
+    fetchData();
+    setInterval(fetchData, 60000);
   </script>
 </body>
 </html>
