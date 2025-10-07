@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 
 const db = new Database('clanTracker.db');
 
-// Create table if it doesn't exist
+// Create snapshots table if it doesn't exist
 db.prepare(`
   CREATE TABLE IF NOT EXISTS snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -16,6 +16,31 @@ db.prepare(`
     requiredTrophies INTEGER,
     clanName TEXT,
     clanTag TEXT
+  )
+`).run();
+
+// Create players table
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS players (
+    playerTag TEXT PRIMARY KEY,
+    playerName TEXT,
+    lastSeen TEXT,
+    townHallLevel INTEGER
+  )
+`).run();
+
+// Create player war stats table
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS player_war_stats (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    playerTag TEXT,
+    timestamp TEXT,
+    warStars INTEGER,
+    attackWins INTEGER,
+    defenseWins INTEGER,
+    donations INTEGER,
+    donationsReceived INTEGER,
+    FOREIGN KEY (playerTag) REFERENCES players(playerTag)
   )
 `).run();
 
@@ -37,6 +62,61 @@ export function insertSnapshot(snapshot) {
   stmt.run(params);
 }
 
+// Upsert player info
+export function upsertPlayer(player) {
+  const stmt = db.prepare(`
+    INSERT INTO players (playerTag, playerName, lastSeen, townHallLevel)
+    VALUES (@playerTag, @playerName, @lastSeen, @townHallLevel)
+    ON CONFLICT(playerTag) DO UPDATE SET
+      playerName = @playerName,
+      lastSeen = @lastSeen,
+      townHallLevel = @townHallLevel
+  `);
+  stmt.run({
+    playerTag: player.tag,
+    playerName: player.name,
+    lastSeen: new Date().toISOString(),
+    townHallLevel: player.townHallLevel || 0
+  });
+}
+
+// Insert player war stats
+export function insertPlayerWarStats(playerTag, stats) {
+  const stmt = db.prepare(`
+    INSERT INTO player_war_stats 
+    (playerTag, timestamp, warStars, attackWins, defenseWins, donations, donationsReceived)
+    VALUES (@playerTag, @timestamp, @warStars, @attackWins, @defenseWins, @donations, @donationsReceived)
+  `);
+  stmt.run({
+    playerTag,
+    timestamp: new Date().toISOString(),
+    warStars: stats.warStars || 0,
+    attackWins: stats.attackWins || 0,
+    defenseWins: stats.defenseWins || 0,
+    donations: stats.donations || 0,
+    donationsReceived: stats.donationsReceived || 0
+  });
+}
+
+// Get all players
+export function getAllPlayers() {
+  const stmt = db.prepare('SELECT * FROM players ORDER BY playerName ASC');
+  return stmt.all();
+}
+
+// Get player war stats history
+export function getPlayerWarStats(playerTag, days = 30) {
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+  
+  const stmt = db.prepare(`
+    SELECT * FROM player_war_stats 
+    WHERE playerTag = ? AND timestamp >= ?
+    ORDER BY timestamp ASC
+  `);
+  return stmt.all(playerTag, cutoffDate.toISOString());
+}
+
 // Get all snapshots
 export function getAllSnapshots() {
   const stmt = db.prepare('SELECT * FROM snapshots ORDER BY timestamp ASC');
@@ -45,13 +125,11 @@ export function getAllSnapshots() {
 
 // Delete old snapshots (keep last 30 days, but ensure we have at least 7 days)
 export function cleanupOldSnapshots() {
-  // First, check if we have enough recent data
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   
   const recentCount = db.prepare('SELECT COUNT(*) as count FROM snapshots WHERE timestamp >= ?').get(sevenDaysAgo.toISOString()).count;
   
-  // Only cleanup if we have enough recent data
   if (recentCount >= 1000) {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -60,6 +138,15 @@ export function cleanupOldSnapshots() {
     return stmt.run(thirtyDaysAgo.toISOString());
   }
   return { changes: 0 };
+}
+
+// Cleanup old player war stats (keep last 60 days)
+export function cleanupOldPlayerStats() {
+  const sixtyDaysAgo = new Date();
+  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+  
+  const stmt = db.prepare('DELETE FROM player_war_stats WHERE timestamp < ?');
+  return stmt.run(sixtyDaysAgo.toISOString());
 }
 
 // Get snapshots within a time range
@@ -83,7 +170,6 @@ export function fillDataGaps() {
     const currentTime = new Date(current.timestamp);
     const diffMinutes = (currentTime - prevTime) / (1000 * 60);
 
-    // If gap is more than 5 minutes, add interpolated points
     if (diffMinutes > 5) {
       const pointsToAdd = Math.floor(diffMinutes / 5) - 1;
       for (let j = 1; j <= pointsToAdd; j++) {
@@ -94,10 +180,10 @@ export function fillDataGaps() {
           timestamp: interpolatedTime.toISOString(),
           members: Math.round(prev.members + (current.members - prev.members) * progress),
           clanPoints: Math.round(prev.clanPoints + (current.clanPoints - prev.clanPoints) * progress),
-          clanLevel: prev.clanLevel,  // Don't interpolate discrete values
+          clanLevel: prev.clanLevel,
           clanCapitalPoints: Math.round(prev.clanCapitalPoints + (current.clanCapitalPoints - prev.clanCapitalPoints) * progress),
-          warWins: prev.warWins,      // Don't interpolate discrete values
-          warLosses: prev.warLosses,  // Don't interpolate discrete values
+          warWins: prev.warWins,
+          warLosses: prev.warLosses,
           requiredTrophies: prev.requiredTrophies,
           clanName: prev.clanName,
           clanTag: prev.clanTag
@@ -109,6 +195,7 @@ export function fillDataGaps() {
 
 // Run cleanup once per day
 setInterval(cleanupOldSnapshots, 24 * 60 * 60 * 1000);
+setInterval(cleanupOldPlayerStats, 24 * 60 * 60 * 1000);
 
 // Run gap filling every hour
 setInterval(fillDataGaps, 60 * 60 * 1000);

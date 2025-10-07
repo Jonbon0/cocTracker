@@ -1,7 +1,15 @@
 import express from "express";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
-import { insertSnapshot, getAllSnapshots, fillDataGaps } from "./db.js";
+import { 
+  insertSnapshot, 
+  getAllSnapshots, 
+  fillDataGaps,
+  upsertPlayer,
+  insertPlayerWarStats,
+  getAllPlayers,
+  getPlayerWarStats
+} from "./db.js";
 
 dotenv.config();
 
@@ -32,14 +40,35 @@ app.get('/api/clan/latest', (req, res) => {
 app.get('/api/clan/history', (req, res) => {
   try {
     const snapshots = getAllSnapshots();
-    // Sort by timestamp in descending order
-    // 7 days * 24 hours * 60 minutes = 10080 minutes (1 week of minute-by-minute data)
     const sortedSnapshots = snapshots
       .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
       .slice(0, 10080);
     res.json({ data: sortedSnapshots });
   } catch (err) {
     console.error('Error fetching history:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Player endpoints
+app.get('/api/players', (req, res) => {
+  try {
+    const players = getAllPlayers();
+    res.json({ data: players });
+  } catch (err) {
+    console.error('Error fetching players:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/players/:playerTag/stats', (req, res) => {
+  try {
+    const playerTag = decodeURIComponent(req.params.playerTag);
+    const days = parseInt(req.query.days) || 30;
+    const stats = getPlayerWarStats(playerTag, days);
+    res.json({ data: stats });
+  } catch (err) {
+    console.error('Error fetching player stats:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -86,9 +115,71 @@ async function fetchClanData() {
   }
 }
 
-// Fetch every minute
+async function fetchPlayerStats() {
+  try {
+    // Get clan members list
+    const response = await fetch(`${API_URL}/clans/${encodeURIComponent(CLAN_TAG)}/members`, {
+      headers: { Authorization: `Bearer ${COC_API_KEY}` },
+    });
+
+    if (!response.ok) throw new Error(`API Error: ${response.status} ${response.statusText}`);
+
+    const data = await response.json();
+    const members = data.items || [];
+
+    console.log(`📊 Fetching stats for ${members.length} players...`);
+
+    // Fetch detailed stats for each player
+    for (const member of members) {
+      try {
+        const playerResponse = await fetch(`${API_URL}/players/${encodeURIComponent(member.tag)}`, {
+          headers: { Authorization: `Bearer ${COC_API_KEY}` },
+        });
+
+        if (!playerResponse.ok) {
+          console.error(`Failed to fetch player ${member.name}: ${playerResponse.status}`);
+          continue;
+        }
+
+        const player = await playerResponse.json();
+
+        // Upsert player info
+        upsertPlayer({
+          tag: player.tag,
+          name: player.name,
+          townHallLevel: player.townHallLevel
+        });
+
+        // Insert war stats
+        insertPlayerWarStats(player.tag, {
+          warStars: player.warStars,
+          attackWins: player.attackWins,
+          defenseWins: player.defenseWins,
+          donations: player.donations,
+          donationsReceived: player.donationsReceived
+        });
+
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (err) {
+        console.error(`Error fetching player ${member.name}:`, err.message);
+      }
+    }
+
+    console.log("✅ Player stats updated");
+  } catch (err) {
+    console.error("Error fetching player stats:", err.message);
+  }
+}
+
+// Fetch clan data every minute
 const POLL_INTERVAL = 60 * 1000; // 1 minute
 setInterval(fetchClanData, POLL_INTERVAL);
+
+// Fetch player stats every 5 minutes (to avoid rate limiting)
+const PLAYER_POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
+setInterval(fetchPlayerStats, PLAYER_POLL_INTERVAL);
+
 // Add initial data backfill on startup
 async function backfillInitialData() {
   const snapshots = getAllSnapshots();
@@ -102,6 +193,7 @@ async function backfillInitialData() {
 // Run immediately and start polling
 backfillInitialData();
 fetchClanData();
+fetchPlayerStats();
 
 // Add endpoint for the HTML frontend
 app.get("/api/snapshots", async (req, res) => {

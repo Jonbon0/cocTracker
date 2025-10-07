@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Player War Stats - Clash of Clans Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background: #f0f2f5; }
+  
+  nav { background: #fff; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  nav a { text-decoration: none; color: #007bff; margin-right: 20px; font-weight: 500; }
+  nav a:hover { text-decoration: underline; }
+  
+  h1 { text-align: center; margin-bottom: 30px; color: #333; }
+  
+  .container { max-width: 1400px; margin: 0 auto; }
+  
+  .player-list { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .player-list h2 { margin-bottom: 15px; color: #333; }
+  
+  .player-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .player-card { 
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 15px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .player-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+  .player-card.selected { 
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    box-shadow: 0 0 0 3px #f5576c;
+  }
+  .player-card h3 { font-size: 16px; margin-bottom: 5px; }
+  .player-card p { font-size: 12px; opacity: 0.9; }
+  
+  .stats-container { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .stats-container h2 { margin-bottom: 20px; color: #333; }
+  
+  .stats-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin-bottom: 30px;
+  }
+  
+  .stat-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+  }
+  
+  .stat-card h4 { font-size: 14px; margin-bottom: 10px; opacity: 0.9; }
+  .stat-card .value { font-size: 28px; font-weight: bold; }
+  .stat-card .change { font-size: 12px; margin-top: 5px; opacity: 0.8; }
+  
+  .chart-wrapper { margin-bottom: 30px; }
+  .chart-wrapper h3 { margin-bottom: 15px; color: #333; font-size: 18px; }
+  canvas { max-height: 350px; }
+  
+  .no-data { text-align: center; padding: 40px; color: #999; font-style: italic; }
+  
+  .loading { text-align: center; padding: 20px; color: #666; }
+  
+  .time-filter { margin-bottom: 20px; text-align: center; }
+  .time-filter button {
+    padding: 10px 20px;
+    margin: 0 5px;
+    border: 2px solid #007bff;
+    background: white;
+    color: #007bff;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+  .time-filter button:hover { background: #007bff; color: white; }
+  .time-filter button.active { background: #007bff; color: white; }
+</style>
+</head>
+<body>
+<div class="container">
+  <nav>
+    <a href="/">Clan Stats</a>
+    <a href="/players.html">Player War Stats</a>
+  </nav>
+  
+  <h1>🏆 Player War Statistics</h1>
+  
+  <div class="player-list">
+    <h2>Select a Player</h2>
+    <div id="playerGrid" class="player-grid">
+      <div class="loading">Loading players...</div>
+    </div>
+  </div>
+  
+  <div class="stats-container" id="statsContainer" style="display: none;">
+    <h2 id="playerName">Player Statistics</h2>
+    
+    <div class="time-filter">
+      <button class="active" data-days="7">7 Days</button>
+      <button data-days="14">14 Days</button>
+      <button data-days="30">30 Days</button>
+      <button data-days="60">60 Days</button>
+    </div>
+    
+    <div class="stats-summary" id="statsSummary">
+      <!-- Stats cards will be inserted here -->
+    </div>
+    
+    <div class="chart-wrapper">
+      <h3>⭐ War Stars Over Time</h3>
+      <canvas id="warStarsChart"></canvas>
+    </div>
+    
+    <div class="chart-wrapper">
+      <h3>⚔️ Attack & Defense Wins</h3>
+      <canvas id="winsChart"></canvas>
+    </div>
+    
+    <div class="chart-wrapper">
+      <h3>🎁 Donations Given vs Received</h3>
+      <canvas id="donationsChart"></canvas>
+    </div>
+    
+    <div class="chart-wrapper">
+      <h3>📊 Donation Ratio</h3>
+      <canvas id="donationRatioChart"></canvas>
+    </div>
+    
+    <div class="chart-wrapper">
+      <h3>📈 Growth Trends (Change from First Data Point)</h3>
+      <canvas id="growthChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentPlayerTag = null;
+let currentDays = 7;
+let charts = {};
+
+async function fetchPlayers() {
+  try {
+    const res = await fetch('/api/players');
+    const data = await res.json();
+    return data.data || [];
+  } catch (err) {
+    console.error('Error fetching players:', err);
+    return [];
+  }
+}
+
+async function fetchPlayerStats(playerTag, days) {
+  try {
+    const res = await fetch(`/api/players/${encodeURIComponent(playerTag)}/stats?days=${days}`);
+    const data = await res.json();
+    return data.data || [];
+  } catch (err) {
+    console.error('Error fetching player stats:', err);
+    return [];
+  }
+}
+
+function renderPlayerList(players) {
+  const grid = document.getElementById('playerGrid');
+  if (players.length === 0) {
+    grid.innerHTML = '<div class="no-data">No players found</div>';
+    return;
+  }
+  
+  grid.innerHTML = players.map(player => `
+    <div class="player-card" data-tag="${player.playerTag}" onclick="selectPlayer('${player.playerTag}', '${player.playerName}')">
+      <h3>${player.playerName}</h3>
+      <p>TH ${player.townHallLevel}</p>
+    </div>
+  `).join('');
+}
+
+function selectPlayer(playerTag, playerName) {
+  currentPlayerTag = playerTag;
+  
+  document.querySelectorAll('.player-card').forEach(card => {
+    card.classList.remove('selected');
+  });
+  document.querySelector(`[data-tag="${playerTag}"]`).classList.add('selected');
+  
+  document.getElementById('statsContainer').style.display = 'block';
+  document.getElementById('playerName').textContent = `${playerName} - War Statistics`;
+  
+  loadPlayerStats(playerTag, currentDays);
+}
+
+function calculateChange(data, field) {
+  if (data.length < 2) return 0;
+  const latest = data[data.length - 1][field];
+  const earliest = data[0][field];
+  return latest - earliest;
+}
+
+function renderStatsSummary(data) {
+  if (data.length === 0) return;
+  
+  const latest = data[data.length - 1];
+  
+  const stats = [
+    { label: 'War Stars', value: latest.warStars, change: calculateChange(data, 'warStars'), color: 'linear-gradient(135deg, #ffc107 0%, #ff9800 100%)' },
+    { label: 'Attack Wins', value: latest.attackWins, change: calculateChange(data, 'attackWins'), color: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)' },
+    { label: 'Defense Wins', value: latest.defenseWins, change: calculateChange(data, 'defenseWins'), color: 'linear-gradient(135deg, #dc3545 0%, #e83e8c 100%)' },
+    { label: 'Donations Given', value: latest.donations, change: calculateChange(data, 'donations'), color: 'linear-gradient(135deg, #007bff 0%, #6610f2 100%)' },
+    { label: 'Donations Received', value: latest.donationsReceived, change: calculateChange(data, 'donationsReceived'), color: 'linear-gradient(135deg, #6c757d 0%, #495057 100%)' }
+  ];
+  
+  const summaryHtml = stats.map(stat => `
+    <div class="stat-card" style="background: ${stat.color}">
+      <h4>${stat.label}</h4>
+      <div class="value">${stat.value.toLocaleString()}</div>
+      <div class="change">${stat.change >= 0 ? '+' : ''}${stat.change.toLocaleString()} in period</div>
+    </div>
+  `).join('');
+  
+  document.getElementById('statsSummary').innerHTML = summaryHtml;
+}
+
+async function loadPlayerStats(playerTag, days) {
+  const stats = await fetchPlayerStats(playerTag, days);
+  
+  if (stats.length === 0) {
+    Object.values(charts).forEach(chart => chart && chart.destroy());
+    charts = {};
+    document.getElementById('statsSummary').innerHTML = '<div class="no-data">No data available for this time period</div>';
+    return;
+  }
+  
+  renderStatsSummary(stats);
+  renderCharts(stats);
+}
+
+function renderCharts(data) {
+  Object.values(charts).forEach(chart => chart && chart.destroy());
+  charts = {};
+  
+  const labels = data.map(d => new Date(d.timestamp).toLocaleDateString());
+  
+  // War Stars Chart
+  charts.warStars = new Chart(document.getElementById('warStarsChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'War Stars',
+        data: data.map(d => d.warStars),
+        borderColor: '#ffc107',
+        backgroundColor: 'rgba(255, 193, 7, 0.1)',
+        fill: true,
+        tension: 0.4,
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: true, position: 'top' },
+        tooltip: { mode: 'index', intersect: false }
+      },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'Total Stars' } },
+        x: { title: { display: true, text: 'Date' } }
+      }
+    }
+  });
+  
+  // Wins Chart (Attack & Defense)
+  charts.wins = new Chart(document.getElementById('winsChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Attack Wins',
+          data: data.map(d => d.attackWins),
+          borderColor: '#28a745',
+          backgroundColor: 'rgba(40, 167, 69, 0.1)',
+          fill: true,
+          tension: 0.4,
+          borderWidth: 2
+        },
+        {
+          label: 'Defense Wins',
+          data: data.map(d => d.defenseWins),
+          borderColor: '#dc3545',
+          backgroundColor: 'rgba(220, 53, 69, 0.1)',
+          fill: true,
+          tension: 0.4,
+          borderWidth: 2
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: true, position: 'top' },
+        tooltip: { mode: 'index', intersect: false }
+      },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'Total Wins' } },
+        x: { title: { display: true, text: 'Date' } }
+      }
+    }
+  });
+  
+  // Donations Chart (Stacked Bar)
+  charts.donations = new Chart(document.getElementById('donationsChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Donations Given',
+          data: data.map(d => d.donations),
+          backgroundColor: 'rgba(0, 123, 255, 0.7)',
+          borderColor: '#007bff',
+          borderWidth: 1
+        },
+        {
+          label: 'Donations Received',
+          data: data.map(d => d.donationsReceived),
+          backgroundColor: 'rgba(108, 117, 125, 0.7)',
+          borderColor: '#6c757d',
+          borderWidth: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: true, position: 'top' },
+        tooltip: { mode: 'index', intersect: false }
+      },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'Total Donations' } },
+        x: { title: { display: true, text: 'Date' } }
+      }
+    }
+  });
+  
+  // Donation Ratio Chart
+  const donationRatios = data.map(d => {
+    if (d.donationsReceived === 0) return d.donations;
+    return (d.donations / d.donationsReceived).toFixed(2);
+  });
+  
+  charts.donationRatio = new Chart(document.getElementById('donationRatioChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Donation Ratio (Given/Received)',
+        data: donationRatios,
+        borderColor: '#6610f2',
+        backgroundColor: 'rgba(102, 16, 242, 0.1)',
+        fill: true,
+        tension: 0.4,
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: true, position: 'top' },
+        tooltip: { 
+          mode: 'index', 
+          intersect: false,
+          callbacks: {
+            label: function(context) {
+              return `Ratio: ${context.parsed.y} (Higher = More Generous)`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: { 
+          beginAtZero: true, 
+          title: { display: true, text: 'Ratio (>1 = Net Giver)' },
+          ticks: {
+            callback: function(value) {
+              return value.toFixed(2);
+            }
+          }
+        },
+        x: { title: { display: true, text: 'Date' } }
+      }
+    }
+  });
+  
+  // Growth Chart (change from baseline)
+  if (data.length > 0) {
+    const baseline = data[0];
+    const growthData = data.map(d => ({
+      warStars: d.warStars - baseline.warStars,
+      attackWins: d.attackWins - baseline.attackWins,
+      defenseWins: d.defenseWins - baseline.defenseWins,
+      donations: d.donations - baseline.donations
+    }));
+    
+    charts.growth = new Chart(document.getElementById('growthChart'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'War Stars Growth',
+            data: growthData.map(d => d.warStars),
+            borderColor: '#ffc107',
+            backgroundColor: 'rgba(255, 193, 7, 0.1)',
+            fill: false,
+            tension: 0.4,
+            borderWidth: 2
+          },
+          {
+            label: 'Attack Wins Growth',
+            data: growthData.map(d => d.attackWins),
+            borderColor: '#28a745',
+            backgroundColor: 'rgba(40, 167, 69, 0.1)',
+            fill: false,
+            tension: 0.4,
+            borderWidth: 2
+          },
+          {
+            label: 'Defense Wins Growth',
+            data: growthData.map(d => d.defenseWins),
+            borderColor: '#dc3545',
+            backgroundColor: 'rgba(220, 53, 69, 0.1)',
+            fill: false,
+            tension: 0.4,
+            borderWidth: 2
+          },
+          {
+            label: 'Donations Growth',
+            data: growthData.map(d => d.donations),
+            borderColor: '#007bff',
+            backgroundColor: 'rgba(0, 123, 255, 0.1)',
+            fill: false,
+            tension: 0.4,
+            borderWidth: 2
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { display: true, position: 'top' },
+          tooltip: { mode: 'index', intersect: false }
+        },
+        scales: {
+          y: { 
+            beginAtZero: true, 
+            title: { display: true, text: 'Change from Start' }
+          },
+          x: { title: { display: true, text: 'Date' } }
+        }
+      }
+    });
+  }
+}
+
+// Time filter buttons
+document.querySelectorAll('.time-filter button').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.time-filter button').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    currentDays = parseInt(this.dataset.days);
+    if (currentPlayerTag) {
+      loadPlayerStats(currentPlayerTag, currentDays);
+    }
+  });
+});
+
+// Initialize
+async function init() {
+  const players = await fetchPlayers();
+  renderPlayerList(players);
+}
+
+init();
+
+// Refresh every 5 minutes
+setInterval(init, 5 * 60 * 1000);
+</script>
+</body>
+</html>
