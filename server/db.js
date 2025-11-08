@@ -25,7 +25,10 @@ db.prepare(`
     playerTag TEXT PRIMARY KEY,
     playerName TEXT,
     lastSeen TEXT,
-    townHallLevel INTEGER
+    lastActive TEXT,
+    townHallLevel INTEGER,
+    activityScore INTEGER DEFAULT 0,
+    warParticipation INTEGER DEFAULT 0
   )
 `).run();
 
@@ -64,19 +67,34 @@ export function insertSnapshot(snapshot) {
 
 // Upsert player info
 export function upsertPlayer(player) {
+  console.log('Upserting player with role:', player.clanRole); // Debug log
   const stmt = db.prepare(`
-    INSERT INTO players (playerTag, playerName, lastSeen, townHallLevel)
-    VALUES (@playerTag, @playerName, @lastSeen, @townHallLevel)
+    INSERT INTO players (playerTag, playerName, lastSeen, lastActive, townHallLevel, activityScore, clanRole)
+    VALUES (@playerTag, @playerName, @lastSeen, @lastActive, @townHallLevel, @activityScore, @clanRole)
     ON CONFLICT(playerTag) DO UPDATE SET
       playerName = @playerName,
       lastSeen = @lastSeen,
-      townHallLevel = @townHallLevel
+      lastActive = @lastActive,
+      townHallLevel = @townHallLevel,
+      activityScore = @activityScore,
+      clanRole = @clanRole
   `);
+  
+  // Calculate activity score (0-100)
+  const activityScore = Math.min(100, Math.floor(
+    (player.donations / 100) + // Points for donations
+    (player.attackWins * 2) +  // Points for attacks
+    (player.warStars * 3)      // Points for war stars
+  ));
+  
   stmt.run({
     playerTag: player.tag,
     playerName: player.name,
     lastSeen: new Date().toISOString(),
-    townHallLevel: player.townHallLevel || 0
+    lastActive: player.lastSeen || new Date().toISOString(),
+    townHallLevel: player.townHallLevel || 0,
+    activityScore: activityScore,
+    clanRole: player.clanRole || 'member'
   });
 }
 
@@ -102,6 +120,12 @@ export function insertPlayerWarStats(playerTag, stats) {
 export function getAllPlayers() {
   const stmt = db.prepare('SELECT * FROM players ORDER BY playerName ASC');
   return stmt.all();
+}
+
+// Get single player info
+export function getPlayer(playerTag) {
+  const stmt = db.prepare('SELECT * FROM players WHERE playerTag = ?');
+  return stmt.get(playerTag);
 }
 
 // Get player war stats history

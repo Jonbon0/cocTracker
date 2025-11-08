@@ -5,89 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Player War Stats - Clash of Clans Tracker</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background: #f0f2f5; }
-  
-  nav { background: #fff; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-  nav a { text-decoration: none; color: #007bff; margin-right: 20px; font-weight: 500; }
-  nav a:hover { text-decoration: underline; }
-  
-  h1 { text-align: center; margin-bottom: 30px; color: #333; }
-  
-  .container { max-width: 1400px; margin: 0 auto; }
-  
-  .player-list { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-  .player-list h2 { margin-bottom: 15px; color: #333; }
-  
-  .player-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-  .player-card { 
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 15px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
-  }
-  .player-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-  .player-card.selected { 
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    box-shadow: 0 0 0 3px #f5576c;
-  }
-  .player-card h3 { font-size: 16px; margin-bottom: 5px; }
-  .player-card p { font-size: 12px; opacity: 0.9; }
-  
-  .stats-container { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-  .stats-container h2 { margin-bottom: 20px; color: #333; }
-  
-  .stats-summary {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 15px;
-    margin-bottom: 30px;
-  }
-  
-  .stat-card {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 20px;
-    border-radius: 8px;
-    text-align: center;
-  }
-  
-  .stat-card h4 { font-size: 14px; margin-bottom: 10px; opacity: 0.9; }
-  .stat-card .value { font-size: 28px; font-weight: bold; }
-  .stat-card .change { font-size: 12px; margin-top: 5px; opacity: 0.8; }
-  
-  .chart-wrapper { margin-bottom: 30px; }
-  .chart-wrapper h3 { margin-bottom: 15px; color: #333; font-size: 18px; }
-  canvas { max-height: 350px; }
-  
-  .no-data { text-align: center; padding: 40px; color: #999; font-style: italic; }
-  
-  .loading { text-align: center; padding: 20px; color: #666; }
-  
-  .time-filter { margin-bottom: 20px; text-align: center; }
-  .time-filter button {
-    padding: 10px 20px;
-    margin: 0 5px;
-    border: 2px solid #007bff;
-    background: white;
-    color: #007bff;
-    border-radius: 5px;
-    cursor: pointer;
-    font-weight: 500;
-    transition: all 0.2s;
-  }
-  .time-filter button:hover { background: #007bff; color: white; }
-  .time-filter button.active { background: #007bff; color: white; }
-</style>
+<link rel="stylesheet" href="styles.css"> 
 </head>
 <body>
 <div class="container">
   <nav>
     <a href="/">Clan Stats</a>
     <a href="/players.html">Player War Stats</a>
+    <a href="/activity.html">Activity Tracker</a>
+    <a href="/clanActivity.html">Clan Rankings</a>
   </nav>
   
   <h1>🏆 Player War Statistics</h1>
@@ -103,10 +29,10 @@
     <h2 id="playerName">Player Statistics</h2>
     
     <div class="time-filter">
-      <button class="active" data-days="7">7 Days</button>
+      <button data-days="7">7 Days</button>
       <button data-days="14">14 Days</button>
       <button data-days="30">30 Days</button>
-      <button data-days="60">60 Days</button>
+      <button data-days="60" class="active">60 Days</button>
     </div>
     
     <div class="stats-summary" id="statsSummary">
@@ -140,10 +66,47 @@
   </div>
 </div>
 
+<style>
+.activity-details {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  margin-top: 20px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.activity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.activity-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 15px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.activity-card h4 {
+  font-size: 14px;
+  margin-bottom: 10px;
+  opacity: 0.9;
+}
+
+.activity-card div {
+  font-size: 24px;
+  font-weight: bold;
+}
+</style>
+
 <script>
+// Global state management
+const charts = {};
 let currentPlayerTag = null;
-let currentDays = 7;
-let charts = {};
+let currentDays = 60;
 
 async function fetchPlayers() {
   try {
@@ -159,8 +122,22 @@ async function fetchPlayers() {
 async function fetchPlayerStats(playerTag, days) {
   try {
     const res = await fetch(`/api/players/${encodeURIComponent(playerTag)}/stats?days=${days}`);
+    if (!res.ok) throw new Error(`Failed to fetch player stats: ${res.status}`);
     const data = await res.json();
-    return data.data || [];
+    if (!Array.isArray(data.data)) {
+      console.error('Invalid stats data:', data);
+      return [];
+    }
+    return data.data.map(stat => ({
+      ...stat,
+      // Ensure consistent property names
+      attackWins: stat.attackWins || 0,
+      defenseWins: stat.defenseWins || 0,
+      warStars: stat.warStars || 0,
+      donations: stat.donations || 0,
+      donationsReceived: stat.donationsReceived || 0,
+      timestamp: stat.timestamp
+    }));
   } catch (err) {
     console.error('Error fetching player stats:', err);
     return [];
@@ -173,11 +150,29 @@ function renderPlayerList(players) {
     grid.innerHTML = '<div class="no-data">No players found</div>';
     return;
   }
+
+  // Define role priority (higher number = higher priority)
+  const rolePriority = {
+    'Leader': 4,
+    'Coleader': 3,
+    'Elder': 2,
+    'Member': 1,
+    'Not Member': 0
+  };
   
-  grid.innerHTML = players.map(player => `
+  // Sort players by role priority and then by name
+  const sortedPlayers = [...players].sort((a, b) => {
+    const roleA = rolePriority[a.clanRole] || 0;
+    const roleB = rolePriority[b.clanRole] || 0;
+    if (roleA !== roleB) return roleB - roleA;
+    return a.playerName.localeCompare(b.playerName);
+  });
+  
+  grid.innerHTML = sortedPlayers.map(player => `
     <div class="player-card" data-tag="${player.playerTag}" onclick="selectPlayer('${player.playerTag}', '${player.playerName}')">
       <h3>${player.playerName}</h3>
       <p>TH ${player.townHallLevel}</p>
+      <p class="role-badge">${player.clanRole || 'Member'}</p>
     </div>
   `).join('');
 }
@@ -208,12 +203,23 @@ function renderStatsSummary(data) {
   
   const latest = data[data.length - 1];
   
+  // Calculate changes
+  const earliest = data[0];
+  const calculateStat = (stat) => {
+    const current = latest[stat] || 0;
+    const initial = earliest[stat] || 0;
+    return {
+      value: current,
+      change: current - initial
+    };
+  };
+  
   const stats = [
-    { label: 'War Stars', value: latest.warStars, change: calculateChange(data, 'warStars'), color: 'linear-gradient(135deg, #ffc107 0%, #ff9800 100%)' },
-    { label: 'Attack Wins', value: latest.attackWins, change: calculateChange(data, 'attackWins'), color: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)' },
-    { label: 'Defense Wins', value: latest.defenseWins, change: calculateChange(data, 'defenseWins'), color: 'linear-gradient(135deg, #dc3545 0%, #e83e8c 100%)' },
-    { label: 'Donations Given', value: latest.donations, change: calculateChange(data, 'donations'), color: 'linear-gradient(135deg, #007bff 0%, #6610f2 100%)' },
-    { label: 'Donations Received', value: latest.donationsReceived, change: calculateChange(data, 'donationsReceived'), color: 'linear-gradient(135deg, #6c757d 0%, #495057 100%)' }
+    { label: 'War Stars', value: latest.warStars || 0, change: calculateChange(data, 'warStars'), color: 'linear-gradient(135deg, #ffc107 0%, #ff9800 100%)' },
+    { label: 'Attack Wins', value: latest.attackWins || 0, change: calculateChange(data, 'attackWins'), color: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)' },
+    { label: 'Defense Wins', value: latest.defenseWins || 0, change: calculateChange(data, 'defenseWins'), color: 'linear-gradient(135deg, #dc3545 0%, #e83e8c 100%)' },
+    { label: 'Donations Given', value: latest.donations || 0, change: calculateChange(data, 'donations'), color: 'linear-gradient(135deg, #007bff 0%, #6610f2 100%)' },
+    { label: 'Donations Received', value: latest.donationsReceived || 0, change: calculateChange(data, 'donationsReceived'), color: 'linear-gradient(135deg, #6c757d 0%, #495057 100%)' }
   ];
   
   const summaryHtml = stats.map(stat => `
@@ -228,25 +234,75 @@ function renderStatsSummary(data) {
 }
 
 async function loadPlayerStats(playerTag, days) {
-  const stats = await fetchPlayerStats(playerTag, days);
-  
-  if (stats.length === 0) {
-    Object.values(charts).forEach(chart => chart && chart.destroy());
-    charts = {};
-    document.getElementById('statsSummary').innerHTML = '<div class="no-data">No data available for this time period</div>';
-    return;
+  try {
+    console.log('Loading stats for player:', playerTag, 'days:', days);
+    
+    // Fetch both stats and player info
+    const [stats, playerResponse] = await Promise.all([
+      fetchPlayerStats(playerTag, days),
+      fetch(`/api/players/${encodeURIComponent(playerTag)}`).then(res => {
+        if (!res.ok) throw new Error(`Failed to fetch player info: ${res.status}`);
+        return res.json();
+      })
+    ]);
+    
+    console.log('Received stats:', stats);
+    console.log('Received player info:', playerResponse);
+    
+    if (stats.length === 0) {
+      Object.values(charts).forEach(chart => chart && chart.destroy());
+      charts = {};
+      document.getElementById('statsSummary').innerHTML = '<div class="no-data">No data available for this time period</div>';
+      return;
+    }
+    
+    renderStatsSummary(stats);
+    renderCharts(stats);
+    renderActivityDetails(stats, playerResponse.data);
+  } catch (error) {
+    console.error('Error loading player stats:', error);
+    document.getElementById('statsSummary').innerHTML = '<div class="error">Error loading player stats. Please try again later.</div>';
   }
+}
+
+function renderActivityDetails(data, player) {
+  // Last seen time
+  const lastActive = new Date(player.lastActive);
+  const now = new Date();
+  const diffHours = Math.floor((now - lastActive) / (1000 * 60 * 60));
+  let lastSeenText;
+  if (diffHours < 1) {
+    lastSeenText = 'Just now';
+  } else if (diffHours < 24) {
+    lastSeenText = `${diffHours} hours ago`;
+  } else {
+    const diffDays = Math.floor(diffHours / 24);
+    lastSeenText = `${diffDays} days ago`;
+  }
+  document.getElementById('lastSeenTime').textContent = lastSeenText;
   
-  renderStatsSummary(stats);
-  renderCharts(stats);
+  // Average daily donations
+  const daySpan = (new Date(data[data.length - 1].timestamp) - new Date(data[0].timestamp)) / (1000 * 60 * 60 * 24);
+  const totalDonations = data[data.length - 1].donations - data[0].donations;
+  const avgDonations = Math.round(totalDonations / daySpan);
+  document.getElementById('avgDonations').textContent = `${avgDonations}/day`;
+  
+  // War participation rate
+  const warStarsGained = data[data.length - 1].warStars - data[0].warStars;
+  document.getElementById('warParticipation').textContent = warStarsGained > 0 ? 'Active' : 'Inactive';
+  
+  // Activity score
+  document.getElementById('activityScore').textContent = `${player.activityScore}/100`;
 }
 
 function renderCharts(data) {
-  Object.values(charts).forEach(chart => chart && chart.destroy());
-  charts = {};
-  
-  const labels = data.map(d => new Date(d.timestamp).toLocaleDateString());
-  
+  try {
+    // Clear any existing charts
+    Object.values(charts).forEach(chart => chart && chart.destroy());
+    
+    // Initialize labels for all charts
+    const labels = data.map(d => new Date(d.timestamp).toLocaleDateString());
+
   // War Stars Chart
   charts.warStars = new Chart(document.getElementById('warStarsChart'), {
     type: 'line',
@@ -472,30 +528,175 @@ function renderCharts(data) {
       }
     });
   }
+
+  // Activity score chart - calculate scores based on daily averages
+  const activityData = data.map((d, i) => {
+    // Calculate daily averages if we have previous data
+    const prevDay = i > 0 ? data[i - 1] : d;
+    const daysDiff = Math.max(1, (new Date(d.timestamp) - new Date(prevDay.timestamp)) / (1000 * 60 * 60 * 24));
+    
+    // Daily donations (40 points max)
+    const dailyDonations = (d.donations - prevDay.donations) / daysDiff;
+    const donationScore = Math.min(40, Math.floor(dailyDonations / 100) * 10);
+    
+    // Daily attack wins (30 points max)
+    const dailyAttacks = (d.attackWins - prevDay.attackWins) / daysDiff;
+    const attackScore = Math.min(30, Math.floor(dailyAttacks * 10));
+    
+    // War stars (30 points max)
+    const dailyWarStars = (d.warStars - prevDay.warStars) / daysDiff;
+    const warScore = Math.min(30, Math.floor(dailyWarStars * 15));
+    
+    return {
+      total: donationScore + attackScore + warScore,
+      donations: donationScore,
+      attacks: attackScore,
+      warStars: warScore
+    };
+  });
+  
+  // Activity Score Chart
+  charts.activity = new Chart(document.getElementById('activityChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Overall Activity',
+          data: activityData.map(d => d.total),
+          borderColor: '#6f42c1',
+          backgroundColor: 'rgba(111, 66, 193, 0.1)',
+          fill: true,
+          tension: 0.4,
+          borderWidth: 2
+        },
+        {
+          label: 'Donations Score',
+          data: activityData.map(d => d.donations),
+          borderColor: '#007bff',
+          backgroundColor: 'rgba(0, 123, 255, 0.1)',
+          fill: true,
+          tension: 0.4,
+          borderWidth: 2,
+          hidden: true
+        },
+        {
+          label: 'Attacks Score',
+          data: activityData.map(d => d.attacks),
+          borderColor: '#28a745',
+          backgroundColor: 'rgba(40, 167, 69, 0.1)',
+          fill: true,
+          tension: 0.4,
+          borderWidth: 2,
+          hidden: true
+        },
+        {
+          label: 'War Score',
+          data: activityData.map(d => d.warStars),
+          borderColor: '#ffc107',
+          backgroundColor: 'rgba(255, 193, 7, 0.1)',
+          fill: true,
+          tension: 0.4,
+          borderWidth: 2,
+          hidden: true
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { 
+          display: true, 
+          position: 'top',
+          onClick: function(e, legendItem, legend) {
+            const index = legendItem.datasetIndex;
+            const ci = legend.chart;
+            if (index === 0) {
+              // Toggle all other datasets when clicking Overall
+              ci.data.datasets.forEach((dataset, i) => {
+                if (i > 0) {
+                  const meta = ci.getDatasetMeta(i);
+                  meta.hidden = !meta.hidden;
+                }
+              });
+            }
+            // Always show/hide the clicked dataset
+            const meta = ci.getDatasetMeta(index);
+            meta.hidden = !meta.hidden;
+            ci.update();
+          }
+        },
+        tooltip: { 
+          mode: 'index', 
+          intersect: false,
+          callbacks: {
+            label: function(context) {
+              const idx = context.dataIndex;
+              const data = activityData[idx];
+              if (context.datasetIndex === 0) {
+                return [
+                  `Overall: ${data.total}/100`,
+                  `Donations: ${data.donations}/40`,
+                  `Attacks: ${data.attacks}/30`,
+                  `War: ${data.warStars}/30`
+                ];
+              }
+              return context.dataset.label + ': ' + context.parsed.y;
+            }
+          }
+        }
+      },
+      scales: {
+        y: { 
+          beginAtZero: true,
+          max: 100,
+          title: { display: true, text: 'Activity Score' }
+        },
+        x: { title: { display: true, text: 'Date' } }
+      }
+    }
+  });
+  } catch (error) {
+    console.error('Error rendering charts:', error);
+    document.querySelectorAll('canvas').forEach(canvas => {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    });
+  }
 }
 
 // Time filter buttons
-document.querySelectorAll('.time-filter button').forEach(btn => {
-  btn.addEventListener('click', function() {
-    document.querySelectorAll('.time-filter button').forEach(b => b.classList.remove('active'));
-    this.classList.add('active');
-    currentDays = parseInt(this.dataset.days);
-    if (currentPlayerTag) {
-      loadPlayerStats(currentPlayerTag, currentDays);
-    }
+function initializeTimeFilters() {
+  document.querySelectorAll('.time-filter button').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.time-filter button').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      currentDays = parseInt(this.dataset.days) || 7; // Default to 7 days if parsing fails
+      if (currentPlayerTag) {
+        loadPlayerStats(currentPlayerTag, currentDays);
+      }
+    });
   });
-});
-
-// Initialize
-async function init() {
-  const players = await fetchPlayers();
-  renderPlayerList(players);
 }
 
-init();
+// Initialize the application
+async function init() {
+  try {
+    const players = await fetchPlayers();
+    renderPlayerList(players);
+    initializeTimeFilters();
+  } catch (error) {
+    console.error('Error initializing:', error);
+  }
+}
 
-// Refresh every 5 minutes
-setInterval(init, 5 * 60 * 1000);
+// Start the app when the DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+  init();
+  // Refresh every 5 minutes
+  setInterval(init, 5 * 60 * 1000);
+});
 </script>
 </body>
 </html>

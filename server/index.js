@@ -8,7 +8,8 @@ import {
   upsertPlayer,
   insertPlayerWarStats,
   getAllPlayers,
-  getPlayerWarStats
+  getPlayerWarStats,
+  getPlayer
 } from "./db.js";
 
 dotenv.config();
@@ -57,6 +58,22 @@ app.get('/api/players', (req, res) => {
     res.json({ data: players });
   } catch (err) {
     console.error('Error fetching players:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get single player info
+app.get('/api/players/:playerTag', (req, res) => {
+  try {
+    const playerTag = decodeURIComponent(req.params.playerTag);
+    const player = getPlayer(playerTag);
+    if (!player) {
+      res.status(404).json({ error: 'Player not found' });
+      return;
+    }
+    res.json({ data: player });
+  } catch (err) {
+    console.error('Error fetching player:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -125,9 +142,14 @@ async function fetchPlayerStats() {
     if (!response.ok) throw new Error(`API Error: ${response.status} ${response.statusText}`);
 
     const data = await response.json();
+    console.log('Full clan data:', data); // Log the entire clan response
     const members = data.items || [];
 
     console.log(`📊 Fetching stats for ${members.length} players...`);
+    // Log complete details of first few members
+    members.slice(0, 3).forEach((member, i) => {
+        console.log(`Member ${i + 1} complete data:`, member);
+    });
 
     // Fetch detailed stats for each player
     for (const member of members) {
@@ -144,19 +166,56 @@ async function fetchPlayerStats() {
         const player = await playerResponse.json();
 
         // Upsert player info
-        upsertPlayer({
+        // Debug the data we're working with
+        console.log('API Data comparison:', {
+            memberFromClan: {
+                tag: member.tag,
+                name: member.name,
+                role: member.role,
+                clanRank: member.clanRank
+            },
+            playerFromAPI: {
+                tag: player.tag,
+                name: player.name,
+                role: player.role,
+                clan: player.clan
+            }
+        });
+
+        // Map API roles to display roles
+        const mapRole = (apiRole) => {
+          const roleMap = {
+            'leader': 'Leader',
+            'coLeader': 'Coleader',
+            'admin': 'Elder',
+            'member': 'Member'
+          };
+          return roleMap[apiRole] || 'Member';
+        };
+
+        // Get the role from the player object
+        const playerData = {
           tag: player.tag,
           name: player.name,
-          townHallLevel: player.townHallLevel
-        });
+          townHallLevel: player.townHallLevel,
+          lastSeen: new Date().toISOString(),
+          lastActive: new Date().toISOString(),
+          clanRole: mapRole(player.role),
+          donations: player.donations || 0,
+          attackWins: player.achievements?.find(a => a.name === "War Hero")?.value || 0,
+          warStars: player.warStars || 0
+        };
+        
+        console.log('Saving player with data:', playerData);
+        upsertPlayer(playerData);
 
         // Insert war stats
         insertPlayerWarStats(player.tag, {
-          warStars: player.warStars,
-          attackWins: player.attackWins,
-          defenseWins: player.defenseWins,
-          donations: player.donations,
-          donationsReceived: player.donationsReceived
+          warStars: player.warStars || 0,
+          attackWins: player.achievements?.find(a => a.name === "War Hero")?.value || 0,
+          defenseWins: player.achievements?.find(a => a.name === "Unbreakable")?.value || 0,
+          donations: player.donations || 0,
+          donationsReceived: player.donationsReceived || 0
         });
 
         // Small delay to avoid rate limiting

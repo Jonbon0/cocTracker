@@ -4,41 +4,21 @@
 <meta charset="UTF-8">
 <title>Clash of Clans Tracker</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<style>
-
-  nav { 
-  background: #fff; 
-  padding: 15px 20px; 
-  border-radius: 8px; 
-  margin-bottom: 20px; 
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1); 
-}
-nav a { 
-  text-decoration: none; 
-  color: #007bff; 
-  margin-right: 20px; 
-  font-weight: 500; 
-}
-nav a:hover { 
-  text-decoration: underline; 
-}
-
-  body { font-family: Arial, sans-serif; padding: 20px; background: #f0f2f5; }
-  h1 { text-align: center; margin-bottom: 20px; }
-  canvas { background: #fff; margin-bottom: 40px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-
-</style>
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <h1>Clan Tracker</h1>
 <nav>
   <a href="/">Clan Stats</a>
   <a href="/players.html">Player War Stats</a>
+  <a href="/activity.html">Activity Tracker</a>
+  <a href="/clanActivity.html">Clan Rankings</a>
 </nav>
 <h2>Summary Chart</h2>
 <canvas id="summaryChart" width="800" height="400"></canvas>
 
 <h2>Individual Metrics</h2>
+
 <canvas id="membersChart" width="800" height="300"></canvas>
 <canvas id="clanPointsChart" width="800" height="300"></canvas>
 <canvas id="clanLevelChart" width="800" height="300"></canvas>

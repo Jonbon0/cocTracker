@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clan Activity Rankings - Clash of Clans Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="container">
+  <nav>
+    <a href="/">Clan Stats</a>
+    <a href="/players.html">Player War Stats</a>
+    <a href="/activity.html">Activity Tracker</a>
+    <a href="/clanActivity.html">Clan Rankings</a>
+  </nav>
+  
+  <h1>🏆 Clan Activity Rankings</h1>
+
+  <div class="time-filter">
+    <button data-days="7">7 Days</button>
+    <button data-days="14">14 Days</button>
+    <button data-days="30">30 Days</button>
+    <button data-days="60" class="active">60 Days</button>
+  </div>
+
+  <div class="activity-rankings">
+    <div class="player-row header-row">
+      <div class="rank">#</div>
+      <div class="player-name">Player</div>
+      <div class="role">Role</div>
+      <div class="stat" title="War stars earned in the selected time period">War Stars Earned</div>
+      <div class="stat" title="Attack wins gained in the last 60 days">Recent Attack Wins</div>
+      <div class="stat">Donations</div>
+      <div class="activity-score">Activity Score</div>
+    </div>
+    <div id="playerRankings">
+      <div class="loading">Loading player rankings...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentDays = 60;
+
+async function fetchPlayers() {
+  try {
+    const res = await fetch('/api/players');
+    const data = await res.json();
+    return data.data || [];
+  } catch (err) {
+    console.error('Error fetching players:', err);
+    return [];
+  }
+}
+
+async function fetchPlayerStats(playerTag, days) {
+  try {
+    const res = await fetch(`/api/players/${encodeURIComponent(playerTag)}/stats?days=${days}`);
+    if (!res.ok) throw new Error(`Failed to fetch player stats: ${res.status}`);
+    const data = await res.json();
+    return data.data || [];
+  } catch (err) {
+    console.error('Error fetching player stats:', err);
+    return [];
+  }
+}
+
+async function calculatePlayerActivity(player, days) {
+  // Fetch stats for both display period and activity calculation
+  const displayStats = await fetchPlayerStats(player.playerTag, days);
+  const activityStats = await fetchPlayerStats(player.playerTag, 60);
+  
+  if (displayStats.length < 2 || activityStats.length < 2) return null;
+
+  // Sort stats by timestamp to ensure chronological order
+  const sortedDisplayStats = [...displayStats].sort((a, b) => 
+    new Date(a.timestamp) - new Date(b.timestamp)
+  );
+
+  // Calculate war stars gained by looking at each data point
+  let warStarsGained = 0;
+  for (let i = 1; i < sortedDisplayStats.length; i++) {
+    const current = sortedDisplayStats[i];
+    const previous = sortedDisplayStats[i - 1];
+    const starDiff = current.warStars - previous.warStars;
+    if (starDiff > 0) {
+      warStarsGained += starDiff;
+    }
+  }
+
+  // Calculate donations
+  const firstDisplayStat = sortedDisplayStats[0];
+  const lastDisplayStat = sortedDisplayStats[sortedDisplayStats.length - 1];
+  const donationsMade = lastDisplayStat.donations - firstDisplayStat.donations;
+
+  // Get the earliest timestamp that we should consider (60 days ago)
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - 60);
+
+  // Calculate attacks within the last 60 days
+  let attacksWithinPeriod = 0;
+  
+  // Sort stats by timestamp to ensure chronological order
+  const sortedStats = [...activityStats].sort((a, b) => 
+    new Date(a.timestamp) - new Date(b.timestamp)
+  );
+
+  // Get the initial attack wins value from the first stat within our 60-day window
+  let baselineAttackWins = sortedStats.find(stat => 
+    new Date(stat.timestamp) >= cutoffDate
+  )?.attackWins || 0;
+
+  // Get the final attack wins value
+  let finalAttackWins = sortedStats[sortedStats.length - 1]?.attackWins || 0;
+
+  // Calculate the difference in attack wins within our 60-day window
+  let attackWinsGained = finalAttackWins - baselineAttackWins;
+  attackWinsGained = Math.max(0, attackWinsGained); // Ensure we don't get negative values
+
+  // Calculate activity score
+  const activityScore = Math.round(
+    (warStarsGained * 30) +        // War stars are worth 30 points each
+    (attackWinsGained * 5) +       // Attack wins are worth 5 points each (60-day window only)
+    (donationsMade / 100)          // Every 100 donations is worth 1 point
+  );
+
+  return {
+    player: player,
+    warStars: warStarsGained,
+    attacks: attackWinsGained,       // Show only attack wins from the last 60 days
+    donations: donationsMade,
+    activityScore: activityScore
+  };
+}
+
+async function updateRankings(days) {
+  const rankingsDiv = document.getElementById('playerRankings');
+  rankingsDiv.innerHTML = '<div class="loading">Loading player rankings...</div>';
+
+  try {
+    // Fetch all players
+    const players = await fetchPlayers();
+    
+    // Calculate activity for each player
+    const activities = await Promise.all(
+      players.map(player => calculatePlayerActivity(player, days))
+    );
+
+    // Filter out null results and sort by activity score
+    const validActivities = activities
+      .filter(activity => activity !== null)
+      .sort((a, b) => b.activityScore - a.activityScore);
+
+    // Generate rankings HTML
+    const rankingsHtml = validActivities.map((activity, index) => `
+      <div class="player-row">
+        <div class="rank${index < 3 ? ' rank-' + (index + 1) : ''}">${index + 1}</div>
+        <div class="player-name">${activity.player.playerName}</div>
+        <div class="role">
+          <span class="role-badge">${activity.player.clanRole || 'Member'}</span>
+        </div>
+        <div class="stat">${activity.warStars.toLocaleString()}</div>
+        <div class="stat">${activity.attacks.toLocaleString()}</div>
+        <div class="stat">${activity.donations.toLocaleString()}</div>
+        <div class="activity-score">${activity.activityScore.toLocaleString()}</div>
+      </div>
+    `).join('');
+
+    rankingsDiv.innerHTML = rankingsHtml;
+  } catch (error) {
+    console.error('Error updating rankings:', error);
+    rankingsDiv.innerHTML = '<div class="loading">Error loading rankings</div>';
+  }
+}
+
+function initializeTimeFilters() {
+  document.querySelectorAll('.time-filter button').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.time-filter button').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      currentDays = parseInt(this.dataset.days) || 60;
+      updateRankings(currentDays);
+    });
+  });
+}
+
+// Initialize the application
+async function init() {
+  try {
+    initializeTimeFilters();
+    await updateRankings(currentDays);
+  } catch (error) {
+    console.error('Error initializing:', error);
+  }
+}
+
+// Start the app when the DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+  init();
+  // Refresh every 5 minutes
+  setInterval(() => updateRankings(currentDays), 5 * 60 * 1000);
+});
+</script>
+</body>
+</html>

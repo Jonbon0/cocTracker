@@ -1,0 +1,384 @@
+/* Clash of Clans Tracker Theme */
+:root {
+  --coc-blue: #0A2239;
+  --coc-gold: #FFB238;
+  --coc-red: #FF4365;
+  --coc-light-blue: #1B4B72;
+  --gradient-gold: linear-gradient(135deg, #FFB238 0%, #FFA000 100%);
+  --gradient-blue: linear-gradient(135deg, #1B4B72 0%, #0A2239 100%);
+}
+
+* { 
+  box-sizing: border-box; 
+  margin: 0; 
+  padding: 0; 
+}
+
+body { 
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+  padding: 20px; 
+  background: #080F1C;
+  color: #fff;
+  line-height: 1.6;
+}
+
+.container { 
+  max-width: 1400px; 
+  margin: 0 auto;
+}
+
+/* Navigation */
+nav { 
+  background: var(--coc-blue); 
+  padding: 20px;
+  border-radius: 12px; 
+  margin-bottom: 30px; 
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  border: 1px solid rgba(255,178,56,0.1);
+}
+
+nav a { 
+  text-decoration: none; 
+  color: var(--coc-gold); 
+  margin-right: 25px; 
+  font-weight: 600;
+  font-size: 1.1em;
+  transition: all 0.3s ease;
+  padding: 8px 16px;
+  border-radius: 6px;
+}
+
+nav a:hover { 
+  background: rgba(255,178,56,0.1);
+  transform: translateY(-2px);
+}
+
+/* Typography */
+h1 { 
+  text-align: center; 
+  margin-bottom: 40px; 
+  color: var(--coc-gold);
+  font-size: 2.5em;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+h2 {
+  color: var(--coc-gold);
+  font-size: 1.8em;
+  margin-bottom: 20px;
+}
+
+h3 {
+  color: var(--coc-gold);
+  font-size: 1.5em;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+h3::after {
+  content: '';
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(255,178,56,0.3) 0%, rgba(255,178,56,0) 100%);
+  margin-left: 15px;
+}
+
+/* Cards and Containers */
+.card, .stats-container, .player-list, .chart-wrapper {
+  background: var(--coc-blue);
+  padding: 25px;
+  border-radius: 12px;
+  margin-bottom: 30px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,178,56,0.1);
+}
+
+/* Grids */
+.grid, .player-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+/* Player Cards */
+.player-card {
+  background: var(--gradient-blue);
+  color: white;
+  padding: 20px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(255,178,56,0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.player-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--gradient-gold);
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+}
+
+.player-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+}
+
+.player-card:hover::before {
+  transform: scaleX(1);
+}
+
+.player-card.selected {
+  background: var(--gradient-gold);
+  border-color: var(--coc-gold);
+  box-shadow: 0 0 25px rgba(255,178,56,0.3);
+}
+
+.player-card h3 {
+  font-size: 18px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.player-card p {
+  font-size: 14px;
+  opacity: 0.9;
+  margin-bottom: 12px;
+}
+
+/* Badges */
+.badge, .role-badge {
+  margin-top: 8px;
+  padding: 4px 10px;
+  background: rgba(255,178,56,0.15);
+  border: 1px solid rgba(255,178,56,0.3);
+  border-radius: 6px;
+  display: inline-block;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--coc-gold);
+}
+
+/* Time Filters */
+.time-filter {
+  margin-bottom: 30px;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.time-filter button {
+  padding: 10px 20px;
+  border: 2px solid var(--coc-gold);
+  background: transparent;
+  color: var(--coc-gold);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  min-width: 100px;
+}
+
+.time-filter button:hover {
+  background: rgba(255,178,56,0.1);
+  transform: translateY(-2px);
+}
+
+.time-filter button.active {
+  background: var(--coc-gold);
+  color: var(--coc-blue);
+  transform: translateY(-2px);
+}
+
+/* Charts */
+.chart-wrapper {
+  position: relative;
+  height: 400px;  /* Fixed height for chart containers */
+  width: 100%;
+  margin-bottom: 30px;
+}
+
+canvas {
+  border-radius: 8px;
+  background: rgba(255,255,255,0.02);
+  padding: 15px;
+  border: 1px solid rgba(255,178,56,0.05);
+  max-height: 100%;  /* Ensure canvas doesn't exceed wrapper height */
+}
+
+/* Stats Summary */
+.stats-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.stat-card {
+  background: var(--gradient-blue);
+  padding: 20px;
+  border-radius: 12px;
+  text-align: center;
+  border: 1px solid rgba(255,178,56,0.1);
+}
+
+.stat-card h4 {
+  color: var(--coc-gold);
+  margin-bottom: 10px;
+  font-size: 1.1em;
+}
+
+.stat-card .value {
+  font-size: 1.8em;
+  font-weight: bold;
+  color: white;
+}
+
+/* Activity Grid */
+.activity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.activity-card {
+  background: var(--gradient-blue);
+  color: white;
+  padding: 20px;
+  border-radius: 12px;
+  text-align: center;
+  border: 1px solid rgba(255,178,56,0.1);
+}
+
+/* Status Messages */
+.loading {
+  color: var(--coc-gold);
+  text-align: center;
+  padding: 30px;
+  font-size: 1.2em;
+}
+
+.error {
+  color: var(--coc-red);
+  text-align: center;
+  padding: 30px;
+  font-size: 1.2em;
+  background: rgba(255,67,101,0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(255,67,101,0.2);
+}
+
+.no-data {
+  color: var(--coc-gold);
+  text-align: center;
+  padding: 30px;
+  font-size: 1.2em;
+  background: rgba(255,178,56,0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(255,178,56,0.2);
+}
+
+/* Table Styles */
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 20px 0;
+}
+
+th, td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255,178,56,0.1);
+}
+
+th {
+  color: var(--coc-gold);
+  font-weight: 600;
+  background: rgba(255,178,56,0.1);
+}
+
+tr:hover {
+  background: rgba(255,178,56,0.05);
+}
+
+/* Clan Activity Specific */
+.clan-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.member-row {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  background: var(--gradient-blue);
+  border: 1px solid rgba(255,178,56,0.1);
+}
+
+.member-row:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  body {
+    padding: 10px;
+  }
+
+  nav {
+    padding: 15px;
+  }
+
+  nav a {
+    margin-right: 15px;
+    font-size: 1em;
+  }
+
+  h1 {
+    font-size: 2em;
+  }
+
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+
+  .time-filter {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  nav {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  nav a {
+    margin-right: 0;
+    width: 100%;
+    text-align: center;
+  }
+
+  .time-filter button {
+    width: 100%;
+  }
+}

@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Player Activity Stats - Clash of Clans Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.1/dist/chartjs-adapter-moment.min.js"></script>
+<link rel="stylesheet" href="styles.css">
+<script src="charts.js"></script>
+<script src="activityUI.js"></script>
+
+</head>
+<body>
+<div class="container">
+  <nav>
+    <a href="/">Clan Stats</a>
+    <a href="/players.html">Player War Stats</a>
+    <a href="/activity.html">Activity Tracker</a>
+    <a href="/clanActivity.html">Clan Rankings</a>
+  </nav>
+  
+  <h1>📊 Player Activity Tracker</h1>
+  
+  <div class="player-list">
+    <h2>Select a Player</h2>
+    <div id="playerGrid" class="player-grid">
+      <div class="loading">Loading players...</div>
+    </div>
+  </div>
+  
+  <div class="stats-container" id="activityContainer" style="display: none;">
+    <div class="time-filter">
+      <button data-days="7">7 Days</button>
+      <button data-days="14">14 Days</button>
+      <button data-days="30">30 Days</button>
+      <button data-days="60" class="active">60 Days</button>
+    </div>
+
+    <div class="activity-details">
+      <h3>Activity Overview</h3>
+      <div class="activity-grid">
+        <div class="activity-card">
+          <h4>Last Active</h4>
+          <div id="lastSeenTime">-</div>
+        </div>
+        <div class="activity-card">
+          <h4>Daily Donations</h4>
+          <div id="avgDonations">-</div>
+        </div>
+        <div class="activity-card">
+          <h4>War Participation</h4>
+          <div id="warParticipation">-</div>
+        </div>
+        <div class="activity-card">
+          <h4>Activity Trend</h4>
+          <div id="activityTrend">-</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="chart-wrapper">
+      <h3>📈 Daily Activity Metrics</h3>
+      <canvas id="activityChart"></canvas>
+    </div>
+
+    <div class="chart-wrapper">
+      <h3>⚔️ War Participation Stats</h3>
+      <canvas id="warParticipationChart"></canvas>
+    </div>
+
+    <div class="chart-wrapper">
+      <h3>📊 Activity Trend Analysis</h3>
+      <canvas id="activityTrendChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+// Global state management
+let currentPlayerTag = null;
+let currentDays = 60;
+
+// Make sure moment.js is available
+if (typeof moment === 'undefined') {
+  console.error('moment.js is required but not loaded');
+}
+
+// Helper function for date formatting
+function formatDate(date) {
+  return new Date(date).toLocaleDateString();
+}
+
+async function fetchPlayers() {
+  try {
+    const res = await fetch('/api/players');
+    const data = await res.json();
+    return data.data || [];
+  } catch (err) {
+    console.error('Error fetching players:', err);
+    return [];
+  }
+}
+
+async function fetchPlayerStats(playerTag, days) {
+  try {
+    const res = await fetch(`/api/players/${encodeURIComponent(playerTag)}/stats?days=${days}`);
+    if (!res.ok) throw new Error(`Failed to fetch player stats: ${res.status}`);
+    const data = await res.json();
+    return data.data || [];
+  } catch (err) {
+    console.error('Error fetching player stats:', err);
+    return [];
+  }
+}
+
+function renderPlayerList(players) {
+  const grid = document.getElementById('playerGrid');
+  if (players.length === 0) {
+    grid.innerHTML = '<div class="no-data">No players found</div>';
+    return;
+  }
+
+  // Define role priority (higher number = higher priority)
+  const rolePriority = {
+    'Leader': 4,
+    'Coleader': 3,
+    'Elder': 2,
+    'Member': 1,
+    'Not Member': 0
+  };
+  
+  // Sort players by role priority and then by name
+  const sortedPlayers = [...players].sort((a, b) => {
+    const roleA = rolePriority[a.clanRole] || 0;
+    const roleB = rolePriority[b.clanRole] || 0;
+    if (roleA !== roleB) return roleB - roleA;
+    return a.playerName.localeCompare(b.playerName);
+  });
+  
+  grid.innerHTML = sortedPlayers.map(player => `
+    <div class="player-card" data-tag="${player.playerTag}" onclick="selectPlayer('${player.playerTag}', '${player.playerName}')">
+      <h3>${player.playerName}</h3>
+      <p>TH ${player.townHallLevel}</p>
+      <p class="role-badge">${player.clanRole || 'Member'}</p>
+    </div>
+  `).join('');
+}
+
+function selectPlayer(playerTag, playerName) {
+  currentPlayerTag = playerTag;
+  
+  document.querySelectorAll('.player-card').forEach(card => {
+    card.classList.remove('selected');
+  });
+  document.querySelector(`[data-tag="${playerTag}"]`).classList.add('selected');
+  
+  document.getElementById('activityContainer').style.display = 'block';
+  loadPlayerActivity(playerTag, currentDays);
+}
+
+async function loadPlayerActivity(playerTag, days) {
+  try {
+    console.log('Loading activity for player:', playerTag, 'days:', days);
+    
+    const container = document.getElementById('activityContainer');
+    container.innerHTML = '<div class="loading">Loading activity data...</div>';
+    
+    const [stats, playerResponse] = await Promise.all([
+      fetchPlayerStats(playerTag, days),
+      fetch(`/api/players/${encodeURIComponent(playerTag)}`).then(res => {
+        if (!res.ok) throw new Error(`Failed to fetch player info: ${res.status}`);
+        return res.json();
+      })
+    ]);
+    
+    if (!stats || stats.length === 0) {
+      container.innerHTML = '<div class="no-data">No activity data available for this time period</div>';
+      return;
+    }
+
+    // Create UI structure with fixed dimensions
+    container.innerHTML = `
+      <div class="time-filter">
+        <button data-days="7">7 Days</button>
+        <button data-days="14">14 Days</button>
+        <button data-days="30">30 Days</button>
+        <button data-days="60" class="active">60 Days</button>
+      </div>
+
+      <div class="activity-details">
+        <h3>Activity Overview</h3>
+        <div class="activity-grid">
+          <div class="activity-card">
+            <h4>Last Active</h4>
+            <div id="lastSeenTime">-</div>
+          </div>
+          <div class="activity-card">
+            <h4>Daily Donations</h4>
+            <div id="avgDonations">-</div>
+          </div>
+          <div class="activity-card">
+            <h4>War Participation</h4>
+            <div id="warParticipation">-</div>
+          </div>
+          <div class="activity-card">
+            <h4>Activity Trend</h4>
+            <div id="activityTrend">-</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="chart-wrapper">
+        <h3>📈 Daily Activity Metrics</h3>
+        <canvas id="activityChart"></canvas>
+      </div>
+
+      <div class="chart-wrapper">
+        <h3>⚔️ War Participation Stats</h3>
+        <canvas id="warParticipationChart"></canvas>
+      </div>
+
+      <div class="chart-wrapper">
+        <h3>📊 Activity Trend Analysis</h3>
+        <canvas id="activityTrendChart"></canvas>
+      </div>
+    `;
+
+    // Initialize time filter events
+    initializeTimeFilters();
+
+    // Render activity data
+    renderActivityDetails(stats, playerResponse.data);
+    renderAllCharts(stats);
+  } catch (error) {
+    console.error('Error loading player activity:', error);
+    document.getElementById('activityContainer').innerHTML = '<div class="error">Error loading activity data. Please try again later.</div>';
+  }
+}
+
+function renderActivityDetails(rawData, player) {
+  // Process and aggregate data by day
+  const data = processData(rawData);
+  
+  // Last seen time
+  const lastActive = new Date(player.lastActive);
+  const now = new Date();
+  const diffHours = Math.floor((now - lastActive) / (1000 * 60 * 60));
+  let lastSeenText;
+  if (diffHours < 1) {
+    lastSeenText = 'Just now';
+  } else if (diffHours < 24) {
+    lastSeenText = diffHours + ' hours ago';
+  } else {
+    const diffDays = Math.floor(diffHours / 24);
+    lastSeenText = diffDays + ' days ago';
+  }
+  document.getElementById('lastSeenTime').textContent = lastSeenText;
+  
+  // Average daily donations
+  const daySpan = (new Date(data[data.length - 1].timestamp) - new Date(data[0].timestamp)) / (1000 * 60 * 60 * 24);
+  const totalDonations = data[data.length - 1].donations - data[0].donations;
+  const avgDonations = Math.round(totalDonations / daySpan);
+  document.getElementById('avgDonations').textContent = avgDonations + '/day';
+  
+  // War participation rate
+  const warStarsGained = data[data.length - 1].warStars - data[0].warStars;
+  document.getElementById('warParticipation').textContent = warStarsGained > 0 ? 'Active' : 'Inactive';
+  
+  // Activity trend
+  const trend = calculateActivityTrend(data);
+  document.getElementById('activityTrend').textContent = trend;
+}
+
+function calculateActivityTrend(rawData) {
+  const data = processData(rawData);
+  if (data.length < 2) return 'Not enough data';
+  
+  const recentActivity = data.slice(-7);
+  let trend = 0;
+  
+  recentActivity.forEach((d, i) => {
+    if (i === 0) return;
+    const prev = recentActivity[i - 1];
+    
+    // Check donations
+    const dailyDonations = d.donations - prev.donations;
+    if (dailyDonations > 100) trend++;
+    
+    // Check attacks
+    const dailyAttacks = d.attackWins - prev.attackWins;
+    if (dailyAttacks > 1) trend++;
+    
+    // Check war stars
+    const dailyWarStars = d.warStars - prev.warStars;
+    if (dailyWarStars > 0) trend++;
+  });
+  
+  if (trend >= 10) return 'Very Active';
+  if (trend >= 5) return 'Active';
+  if (trend >= 2) return 'Moderate';
+  return 'Low Activity';
+}
+
+function processData(data) {
+  if (!data || !Array.isArray(data) || data.length === 0) {
+    console.error('Invalid or empty data provided to processData');
+    return [];
+  }
+
+  // Sort data by timestamp first
+  data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  
+  // Group by day using a Map
+  const dailyData = new Map();
+  
+  data.forEach(entry => {
+    const date = new Date(entry.timestamp);
+    date.setHours(0, 0, 0, 0);
+    const dateKey = date.toISOString().split('T')[0];
+    
+    if (!dailyData.has(dateKey)) {
+      dailyData.set(dateKey, { 
+        timestamp: date.toISOString(),
+        donations: entry.donations || 0,
+        attackWins: entry.attackWins || 0,
+        warStars: entry.warStars || 0
+      });
+    } else {
+      // Update with max values if multiple entries exist for the same day
+      const existing = dailyData.get(dateKey);
+      dailyData.set(dateKey, {
+        ...existing,
+        donations: Math.max(entry.donations || 0, existing.donations),
+        attackWins: Math.max(entry.attackWins || 0, existing.attackWins),
+        warStars: Math.max(entry.warStars || 0, existing.warStars)
+      });
+    }
+  });
+  
+  // Convert to array and sort by date
+  return Array.from(dailyData.values())
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+}
+
+function renderAllCharts(rawData) {
+  try {
+    if (!rawData || !Array.isArray(rawData) || rawData.length === 0) {
+      console.error('Invalid or empty data provided to renderAllCharts');
+      return;
+    }
+
+    // Clear any existing charts
+    Object.values(charts).forEach(chart => {
+      if (chart) {
+        chart.destroy();
+      }
+    });
+    charts = {};
+    
+    // Process and aggregate data by day
+    const data = processData(rawData);
+    
+    // Calculate daily activity metrics
+    const activityData = [];
+    
+    for (let i = 1; i < data.length; i++) {
+      const curr = data[i];
+      const prev = data[i-1];
+      
+      activityData.push({
+        date: new Date(curr.timestamp),
+        donations: curr.donations - prev.donations,
+        attacks: curr.attackWins - prev.attackWins,
+        warStars: curr.warStars - prev.warStars
+      });
+    }
+
+    // Render main activity chart
+    const activityCanvas = document.getElementById('activityChart');
+    const activityCtx = activityCanvas.getContext('2d');
+    
+    // Activity Chart
+    charts.activity = new Chart(activityCtx, {
+      type: 'bar',
+      data: {
+        datasets: [
+          {
+            label: 'Daily Donations',
+            data: activityData.map(d => ({
+              x: d.date,
+              y: d.donations
+            })),
+            backgroundColor: 'rgba(0, 123, 255, 0.7)',
+            borderColor: '#007bff',
+            borderWidth: 1,
+            yAxisID: 'donations'
+          },
+          {
+            label: 'Daily Attacks',
+            data: activityData.map(d => ({
+              x: d.date,
+              y: d.attacks
+            })),
+            backgroundColor: 'rgba(40, 167, 69, 0.7)',
+            borderColor: '#28a745',
+            borderWidth: 1,
+            yAxisID: 'attacks'
+          },
+          {
+            label: 'Daily War Stars',
+            data: activityData.map(d => ({
+              x: d.date,
+              y: d.warStars
+            })),
+            backgroundColor: 'rgba(255, 193, 7, 0.7)',
+            borderColor: '#ffc107',
+            borderWidth: 1,
+            yAxisID: 'stars'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { 
+            display: true, 
+            position: 'top',
+            labels: {
+              boxWidth: 20,
+              padding: 20
+            }
+          },
+          tooltip: {
+            mode: 'index',
+            intersect: false,
+            callbacks: {
+              title: function(tooltipItems) {
+                return moment(tooltipItems[0].parsed.x).format('MMM D, YYYY');
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            type: 'time',
+            time: {
+              unit: 'day',
+              displayFormats: {
+                day: 'MMM D'
+              }
+            },
+            title: {
+              display: true,
+              text: 'Date'
+            },
+            grid: {
+              display: true,
+              drawOnChartArea: true
+            }
+          },
+          donations: {
+            type: 'linear',
+            position: 'left',
+            title: {
+              display: true,
+              text: 'Daily Donations'
+            },
+            min: 0,
+            grid: {
+              drawOnChartArea: true
+            }
+          },
+          attacks: {
+            type: 'linear',
+            position: 'right',
+            title: {
+              display: true,
+              text: 'Daily Attacks'
+            },
+            min: 0,
+            grid: {
+              drawOnChartArea: false
+            }
+          },
+          stars: {
+            type: 'linear',
+            position: 'right',
+            title: {
+              display: true,
+              text: 'War Stars'
+            },
+            min: 0,
+            grid: {
+              drawOnChartArea: false
+            }
+          }
+        },
+        animation: {
+          duration: 750
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error rendering activity chart:', error);
+    const canvas = document.getElementById('activityChart');
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+}
+
+// Function has been moved to charts.js
+
+function initializeTimeFilters() {
+  document.querySelectorAll('.time-filter button').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.time-filter button').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      currentDays = parseInt(this.dataset.days) || 60;
+      if (currentPlayerTag) {
+        loadPlayerActivity(currentPlayerTag, currentDays);
+      }
+    });
+  });
+}
+
+// Initialize the application
+async function init() {
+  try {
+    const players = await fetchPlayers();
+    renderPlayerList(players);
+    initializeTimeFilters();
+  } catch (error) {
+    console.error('Error initializing:', error);
+  }
+}
+
+// Start the app when the DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+  init();
+  // Refresh every 5 minutes
+  setInterval(init, 5 * 60 * 1000);
+});
+</script>
+</body>
+</html>
