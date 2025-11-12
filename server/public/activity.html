@@ -8,9 +8,6 @@
 <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.1/dist/chartjs-adapter-moment.min.js"></script>
 <link rel="stylesheet" href="styles.css">
-<script src="charts.js"></script>
-<script src="activityUI.js"></script>
-
 </head>
 <body>
 <div class="container">
@@ -61,17 +58,17 @@
     </div>
     
     <div class="chart-wrapper">
-      <h3>📈 Daily Activity Metrics</h3>
+      <h3>Daily Activity Metrics</h3>
       <canvas id="activityChart"></canvas>
     </div>
 
     <div class="chart-wrapper">
-      <h3>⚔️ War Participation Stats</h3>
+      <h3>War Participation Stats</h3>
       <canvas id="warParticipationChart"></canvas>
     </div>
 
     <div class="chart-wrapper">
-      <h3>📊 Activity Trend Analysis</h3>
+      <h3>Activity Trend Analysis</h3>
       <canvas id="activityTrendChart"></canvas>
     </div>
   </div>
@@ -81,6 +78,7 @@
 // Global state management
 let currentPlayerTag = null;
 let currentDays = 60;
+let charts = {};
 
 // Make sure moment.js is available
 if (typeof moment === 'undefined') {
@@ -164,9 +162,6 @@ async function loadPlayerActivity(playerTag, days) {
   try {
     console.log('Loading activity for player:', playerTag, 'days:', days);
     
-    const container = document.getElementById('activityContainer');
-    container.innerHTML = '<div class="loading">Loading activity data...</div>';
-    
     const [stats, playerResponse] = await Promise.all([
       fetchPlayerStats(playerTag, days),
       fetch(`/api/players/${encodeURIComponent(playerTag)}`).then(res => {
@@ -175,60 +170,12 @@ async function loadPlayerActivity(playerTag, days) {
       })
     ]);
     
+    console.log('Received stats:', stats);
+    
     if (!stats || stats.length === 0) {
-      container.innerHTML = '<div class="no-data">No activity data available for this time period</div>';
+      document.getElementById('activityContainer').innerHTML = '<div class="no-data">No activity data available for this time period</div>';
       return;
     }
-
-    // Create UI structure with fixed dimensions
-    container.innerHTML = `
-      <div class="time-filter">
-        <button data-days="7">7 Days</button>
-        <button data-days="14">14 Days</button>
-        <button data-days="30">30 Days</button>
-        <button data-days="60" class="active">60 Days</button>
-      </div>
-
-      <div class="activity-details">
-        <h3>Activity Overview</h3>
-        <div class="activity-grid">
-          <div class="activity-card">
-            <h4>Last Active</h4>
-            <div id="lastSeenTime">-</div>
-          </div>
-          <div class="activity-card">
-            <h4>Daily Donations</h4>
-            <div id="avgDonations">-</div>
-          </div>
-          <div class="activity-card">
-            <h4>War Participation</h4>
-            <div id="warParticipation">-</div>
-          </div>
-          <div class="activity-card">
-            <h4>Activity Trend</h4>
-            <div id="activityTrend">-</div>
-          </div>
-        </div>
-      </div>
-      
-      <div class="chart-wrapper">
-        <h3>📈 Daily Activity Metrics</h3>
-        <canvas id="activityChart"></canvas>
-      </div>
-
-      <div class="chart-wrapper">
-        <h3>⚔️ War Participation Stats</h3>
-        <canvas id="warParticipationChart"></canvas>
-      </div>
-
-      <div class="chart-wrapper">
-        <h3>📊 Activity Trend Analysis</h3>
-        <canvas id="activityTrendChart"></canvas>
-      </div>
-    `;
-
-    // Initialize time filter events
-    initializeTimeFilters();
 
     // Render activity data
     renderActivityDetails(stats, playerResponse.data);
@@ -362,6 +309,11 @@ function renderAllCharts(rawData) {
     // Process and aggregate data by day
     const data = processData(rawData);
     
+    if (data.length < 2) {
+      console.warn('Not enough data points for charts');
+      return;
+    }
+    
     // Calculate daily activity metrics
     const activityData = [];
     
@@ -395,7 +347,7 @@ function renderAllCharts(rawData) {
             backgroundColor: 'rgba(0, 123, 255, 0.7)',
             borderColor: '#007bff',
             borderWidth: 1,
-            yAxisID: 'donations'
+            yAxisID: 'y'
           },
           {
             label: 'Daily Attacks',
@@ -406,7 +358,7 @@ function renderAllCharts(rawData) {
             backgroundColor: 'rgba(40, 167, 69, 0.7)',
             borderColor: '#28a745',
             borderWidth: 1,
-            yAxisID: 'attacks'
+            yAxisID: 'y'
           },
           {
             label: 'Daily War Stars',
@@ -417,7 +369,7 @@ function renderAllCharts(rawData) {
             backgroundColor: 'rgba(255, 193, 7, 0.7)',
             borderColor: '#ffc107',
             borderWidth: 1,
-            yAxisID: 'stars'
+            yAxisID: 'y'
           }
         ]
       },
@@ -461,40 +413,16 @@ function renderAllCharts(rawData) {
               drawOnChartArea: true
             }
           },
-          donations: {
+          y: {
             type: 'linear',
             position: 'left',
             title: {
               display: true,
-              text: 'Daily Donations'
+              text: 'Daily Activity'
             },
             min: 0,
             grid: {
               drawOnChartArea: true
-            }
-          },
-          attacks: {
-            type: 'linear',
-            position: 'right',
-            title: {
-              display: true,
-              text: 'Daily Attacks'
-            },
-            min: 0,
-            grid: {
-              drawOnChartArea: false
-            }
-          },
-          stars: {
-            type: 'linear',
-            position: 'right',
-            title: {
-              display: true,
-              text: 'War Stars'
-            },
-            min: 0,
-            grid: {
-              drawOnChartArea: false
             }
           }
         },
@@ -503,17 +431,216 @@ function renderAllCharts(rawData) {
         }
       }
     });
-  } catch (error) {
-    console.error('Error rendering activity chart:', error);
-    const canvas = document.getElementById('activityChart');
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // War Participation Chart
+    const warCanvas = document.getElementById('warParticipationChart');
+    const warCtx = warCanvas.getContext('2d');
+    
+    charts.warParticipation = new Chart(warCtx, {
+      type: 'line',
+      data: {
+        datasets: [
+          {
+            label: 'Cumulative War Stars',
+            data: data.map(d => ({
+              x: new Date(d.timestamp),
+              y: d.warStars
+            })),
+            borderColor: '#ffc107',
+            backgroundColor: 'rgba(255, 193, 7, 0.1)',
+            fill: true,
+            tension: 0.4,
+            borderWidth: 2
+          },
+          {
+            label: 'Cumulative Attack Wins',
+            data: data.map(d => ({
+              x: new Date(d.timestamp),
+              y: d.attackWins
+            })),
+            borderColor: '#28a745',
+            backgroundColor: 'rgba(40, 167, 69, 0.1)',
+            fill: true,
+            tension: 0.4,
+            borderWidth: 2
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { 
+            display: true, 
+            position: 'top' 
+          },
+          tooltip: {
+            mode: 'index',
+            intersect: false,
+            callbacks: {
+              title: function(tooltipItems) {
+                return moment(tooltipItems[0].parsed.x).format('MMM D, YYYY');
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            type: 'time',
+            time: {
+              unit: 'day',
+              displayFormats: {
+                day: 'MMM D'
+              }
+            },
+            title: {
+              display: true,
+              text: 'Date'
+            }
+          },
+          y: {
+            beginAtZero: true,
+            title: {
+              display: true,
+              text: 'Total Count'
+            }
+          }
+        }
+      }
+    });
+
+    // Activity Trend Chart - Growth from baseline
+    const trendCanvas = document.getElementById('activityTrendChart');
+    const trendCtx = trendCanvas.getContext('2d');
+    
+    console.log('Creating activity trend chart with data points:', data.length);
+
+    if (data.length === 0) {
+      console.warn('No data to display in activity trend');
+      trendCtx.clearRect(0, 0, trendCanvas.width, trendCanvas.height);
+      return;
     }
+
+    // Calculate growth from the first data point (baseline)
+    const baseline = data[0];
+    const growthData = data.map(d => ({
+      date: new Date(d.timestamp),
+      donations: d.donations - baseline.donations,
+      attackWins: d.attackWins - baseline.attackWins,
+      warStars: d.warStars - baseline.warStars
+    }));
+
+    charts.activityTrend = new Chart(trendCtx, {
+      type: 'line',
+      data: {
+        datasets: [
+          {
+            label: 'Donations Gained',
+            data: growthData.map(d => ({
+              x: d.date,
+              y: d.donations
+            })),
+            borderColor: '#007bff',
+            backgroundColor: 'rgba(0, 123, 255, 0.1)',
+            fill: true,
+            tension: 0.4,
+            borderWidth: 2,
+            pointRadius: 3,
+            pointHoverRadius: 5
+          },
+          {
+            label: 'Attack Wins Gained',
+            data: growthData.map(d => ({
+              x: d.date,
+              y: d.attackWins
+            })),
+            borderColor: '#28a745',
+            backgroundColor: 'rgba(40, 167, 69, 0.1)',
+            fill: true,
+            tension: 0.4,
+            borderWidth: 2,
+            pointRadius: 3,
+            pointHoverRadius: 5
+          },
+          {
+            label: 'War Stars Earned',
+            data: growthData.map(d => ({
+              x: d.date,
+              y: d.warStars
+            })),
+            borderColor: '#ffc107',
+            backgroundColor: 'rgba(255, 193, 7, 0.1)',
+            fill: true,
+            tension: 0.4,
+            borderWidth: 2,
+            pointRadius: 3,
+            pointHoverRadius: 5
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { 
+            display: true, 
+            position: 'top' 
+          },
+          tooltip: {
+            mode: 'index',
+            intersect: false,
+            callbacks: {
+              title: function(tooltipItems) {
+                return moment(tooltipItems[0].parsed.x).format('MMM D, YYYY');
+              },
+              label: function(context) {
+                return context.dataset.label + ': +' + Math.round(context.parsed.y).toLocaleString();
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            type: 'time',
+            time: {
+              unit: 'day',
+              displayFormats: {
+                day: 'MMM D'
+              }
+            },
+            title: {
+              display: true,
+              text: 'Date'
+            }
+          },
+          y: {
+            beginAtZero: true,
+            title: {
+              display: true,
+              text: 'Gained During Period'
+            },
+            ticks: {
+              callback: function(value) {
+                return '+' + value.toLocaleString();
+              }
+            }
+          }
+        }
+      }
+    });
+
+    console.log('All charts rendered successfully');
+  } catch (error) {
+    console.error('Error rendering charts:', error);
+    ['activityChart', 'warParticipationChart', 'activityTrendChart'].forEach(id => {
+      const canvas = document.getElementById(id);
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    });
   }
 }
-
-// Function has been moved to charts.js
 
 function initializeTimeFilters() {
   document.querySelectorAll('.time-filter button').forEach(btn => {

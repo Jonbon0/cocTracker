@@ -19,7 +19,7 @@ db.prepare(`
   )
 `).run();
 
-// Create players table
+// Create players table with clanRole column
 db.prepare(`
   CREATE TABLE IF NOT EXISTS players (
     playerTag TEXT PRIMARY KEY,
@@ -28,9 +28,21 @@ db.prepare(`
     lastActive TEXT,
     townHallLevel INTEGER,
     activityScore INTEGER DEFAULT 0,
-    warParticipation INTEGER DEFAULT 0
+    warParticipation INTEGER DEFAULT 0,
+    clanRole TEXT DEFAULT 'Member'
   )
 `).run();
+
+// Add clanRole column if it doesn't exist (for existing databases)
+try {
+  db.prepare(`ALTER TABLE players ADD COLUMN clanRole TEXT DEFAULT 'Member'`).run();
+  console.log('✅ Added clanRole column to existing database');
+} catch (err) {
+  // Column already exists, this is fine
+  if (!err.message.includes('duplicate column name')) {
+    console.error('Error adding clanRole column:', err);
+  }
+}
 
 // Create player war stats table
 db.prepare(`
@@ -94,7 +106,7 @@ export function upsertPlayer(player) {
     lastActive: player.lastSeen || new Date().toISOString(),
     townHallLevel: player.townHallLevel || 0,
     activityScore: activityScore,
-    clanRole: player.clanRole || 'member'
+    clanRole: player.clanRole || 'Member'
   });
 }
 

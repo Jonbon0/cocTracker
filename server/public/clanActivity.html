@@ -6,6 +6,122 @@
 <title>Clan Activity Rankings - Clash of Clans Tracker</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <link rel="stylesheet" href="styles.css">
+<style>
+/* Additional styles for clan rankings */
+.activity-rankings {
+  background: var(--coc-blue);
+  padding: 25px;
+  border-radius: 12px;
+  margin-bottom: 30px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,178,56,0.1);
+}
+
+.player-row {
+  display: grid;
+  grid-template-columns: 60px 1fr 120px 150px 180px 150px 150px;
+  gap: 15px;
+  align-items: center;
+  padding: 15px 20px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  background: rgba(27, 75, 114, 0.3);
+  border: 1px solid rgba(255,178,56,0.1);
+  transition: all 0.3s ease;
+}
+
+.player-row:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  background: rgba(27, 75, 114, 0.5);
+}
+
+.header-row {
+  background: rgba(255,178,56,0.15) !important;
+  font-weight: 600;
+  color: var(--coc-gold);
+  margin-bottom: 15px;
+  border: 1px solid rgba(255,178,56,0.3);
+}
+
+.header-row:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.rank {
+  font-size: 1.3em;
+  font-weight: bold;
+  text-align: center;
+  color: var(--coc-gold);
+}
+
+.rank-1 {
+  color: #FFD700;
+  font-size: 1.5em;
+}
+
+.rank-2 {
+  color: #C0C0C0;
+  font-size: 1.4em;
+}
+
+.rank-3 {
+  color: #CD7F32;
+  font-size: 1.4em;
+}
+
+.player-name {
+  font-weight: 600;
+  font-size: 1.1em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.role {
+  text-align: center;
+}
+
+.stat {
+  text-align: center;
+  font-size: 1.05em;
+}
+
+.activity-score {
+  font-size: 1.2em;
+  font-weight: bold;
+  text-align: center;
+  color: var(--coc-gold);
+}
+
+/* Responsive design */
+@media (max-width: 1200px) {
+  .player-row {
+    grid-template-columns: 50px 1fr 100px 120px 120px 120px;
+    gap: 10px;
+    padding: 12px 15px;
+    font-size: 0.95em;
+  }
+}
+
+@media (max-width: 768px) {
+  .player-row {
+    grid-template-columns: 40px 1fr 80px 100px;
+    gap: 8px;
+    padding: 10px;
+    font-size: 0.9em;
+  }
+  
+  .stat:nth-child(5) {
+    display: none;
+  }
+  
+  .header-row .stat:nth-child(5) {
+    display: none;
+  }
+}
+</style>
 </head>
 <body>
 <div class="container">
@@ -16,7 +132,7 @@
     <a href="/clanActivity.html">Clan Rankings</a>
   </nav>
   
-  <h1>🏆 Clan Activity Rankings</h1>
+  <h1>Clan Activity Rankings</h1>
 
   <div class="time-filter">
     <button data-days="7">7 Days</button>
@@ -30,10 +146,9 @@
       <div class="rank">#</div>
       <div class="player-name">Player</div>
       <div class="role">Role</div>
-      <div class="stat" title="War stars earned in the selected time period">War Stars Earned</div>
-      <div class="stat" title="Attack wins gained in the last 60 days">Recent Attack Wins</div>
+      <div class="stat" title="War stars earned in the selected time period">War Stars</div>
       <div class="stat">Donations</div>
-      <div class="activity-score">Activity Score</div>
+      <div class="activity-score">Score</div>
     </div>
     <div id="playerRankings">
       <div class="loading">Loading player rankings...</div>
@@ -95,41 +210,15 @@ async function calculatePlayerActivity(player, days) {
   const lastDisplayStat = sortedDisplayStats[sortedDisplayStats.length - 1];
   const donationsMade = lastDisplayStat.donations - firstDisplayStat.donations;
 
-  // Get the earliest timestamp that we should consider (60 days ago)
-  const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - 60);
-
-  // Calculate attacks within the last 60 days
-  let attacksWithinPeriod = 0;
-  
-  // Sort stats by timestamp to ensure chronological order
-  const sortedStats = [...activityStats].sort((a, b) => 
-    new Date(a.timestamp) - new Date(b.timestamp)
-  );
-
-  // Get the initial attack wins value from the first stat within our 60-day window
-  let baselineAttackWins = sortedStats.find(stat => 
-    new Date(stat.timestamp) >= cutoffDate
-  )?.attackWins || 0;
-
-  // Get the final attack wins value
-  let finalAttackWins = sortedStats[sortedStats.length - 1]?.attackWins || 0;
-
-  // Calculate the difference in attack wins within our 60-day window
-  let attackWinsGained = finalAttackWins - baselineAttackWins;
-  attackWinsGained = Math.max(0, attackWinsGained); // Ensure we don't get negative values
-
-  // Calculate activity score
+  // Calculate activity score (increased war stars weight)
   const activityScore = Math.round(
-    (warStarsGained * 30) +        // War stars are worth 30 points each
-    (attackWinsGained * 5) +       // Attack wins are worth 5 points each (60-day window only)
+    (warStarsGained * 50) +        // War stars are worth 50 points each (increased from 30)
     (donationsMade / 100)          // Every 100 donations is worth 1 point
   );
 
   return {
     player: player,
     warStars: warStarsGained,
-    attacks: attackWinsGained,       // Show only attack wins from the last 60 days
     donations: donationsMade,
     activityScore: activityScore
   };
@@ -162,7 +251,6 @@ async function updateRankings(days) {
           <span class="role-badge">${activity.player.clanRole || 'Member'}</span>
         </div>
         <div class="stat">${activity.warStars.toLocaleString()}</div>
-        <div class="stat">${activity.attacks.toLocaleString()}</div>
         <div class="stat">${activity.donations.toLocaleString()}</div>
         <div class="activity-score">${activity.activityScore.toLocaleString()}</div>
       </div>
