@@ -2,28 +2,44 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Clash of Clans Tracker</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clan Stats - Clash of Clans Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.1/dist/chartjs-adapter-moment.min.js"></script>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<div class="container">
+  <nav>
+    <a href="/">Clan Stats</a>
+    <a href="/players.html">Player War Stats</a>
+    <a href="/activity.html">Activity Tracker</a>
+    <a href="/clanActivity.html">Clan Rankings</a>
+  </nav>
+  
+  <h1>Clan Statistics</h1>
+  
+  <div class="chart-wrapper">
+    <h3>Summary Chart</h3>
+    <canvas id="summaryChart"></canvas>
+  </div>
 
-<nav>
-  <a href="/">Clan Stats</a>
-  <a href="/players.html">Player War Stats</a>
-  <a href="/activity.html">Activity Tracker</a>
-  <a href="/clanActivity.html">Clan Rankings</a>
-</nav>
-<h1>Clan Tracker</h1>
-<h2>Summary Chart</h2>
-<canvas id="summaryChart" width="800" height="400"></canvas>
-
-<h2>Individual Metrics</h2>
-
-<canvas id="membersChart" width="800" height="300"></canvas>
-<canvas id="clanPointsChart" width="800" height="300"></canvas>
-<canvas id="clanLevelChart" width="800" height="300"></canvas>
-<canvas id="capitalPointsChart" width="800" height="300"></canvas>
+  <div class="chart-wrapper">
+    <h3>Members Over Time</h3>
+    <canvas id="membersChart"></canvas>
+  </div>
+  
+  <div class="chart-wrapper">
+    <h3>Clan Points Over Time</h3>
+    <canvas id="clanPointsChart"></canvas>
+  </div>
+  
+  <div class="chart-wrapper">
+    <h3>Capital Points Over Time</h3>
+    <canvas id="capitalPointsChart"></canvas>
+  </div>
+</div>
 
 <script>
 async function fetchSnapshots() {
@@ -31,36 +47,79 @@ async function fetchSnapshots() {
   return await res.json();
 }
 
-// Convert timestamp to YYYY-MM-DD (day only)
-function getDayLabels(data) {
-  return data.map(d => new Date(d.timestamp).toISOString().split('T')[0]);
-}
-
 function renderChart(canvasId, label, data, color, field) {
   return new Chart(document.getElementById(canvasId), {
     type: 'line',
     data: {
-      labels: getDayLabels(data),
       datasets: [{
         label,
-        data: data.map(d => d[field]),
+        data: data.map(d => ({
+          x: new Date(d.timestamp),
+          y: d[field]
+        })),
         borderColor: color,
         backgroundColor: color + '33',
         fill: true,
-        tension: 0.2,
-        pointRadius: 4,
-        pointHoverRadius: 6
+        tension: 0.4,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        borderWidth: 2
       }]
     },
     options: {
       responsive: true,
+      maintainAspectRatio: false,
       plugins: {
-        legend: { display: true, position: 'top' },
-        tooltip: { enabled: true, mode: 'index', intersect: false }
+        legend: { 
+          display: true, 
+          position: 'top',
+          labels: {
+            boxWidth: 20,
+            padding: 20
+          }
+        },
+        tooltip: { 
+          enabled: true, 
+          mode: 'index', 
+          intersect: false,
+          callbacks: {
+            title: function(tooltipItems) {
+              return moment(tooltipItems[0].parsed.x).format('MMM D, YYYY');
+            }
+          }
+        }
       },
       scales: {
-        y: { beginAtZero: true, grid: { color: '#ddd' }, title: { display: true, text: label } },
-        x: { grid: { color: '#ddd' }, title: { display: true, text: 'Date' } }
+        x: {
+          type: 'time',
+          time: {
+            unit: 'day',
+            displayFormats: {
+              day: 'MMM D'
+            }
+          },
+          title: {
+            display: true,
+            text: 'Date'
+          },
+          grid: {
+            display: true,
+            drawOnChartArea: true
+          }
+        },
+        y: { 
+          beginAtZero: true, 
+          title: { 
+            display: true, 
+            text: label 
+          },
+          grid: {
+            drawOnChartArea: true
+          }
+        }
+      },
+      animation: {
+        duration: 750
       }
     }
   });
@@ -83,7 +142,6 @@ async function updateCharts() {
   window.charts = [
     renderChart('membersChart', 'Members', data, '#007bff', 'members'),
     renderChart('clanPointsChart', 'Clan Points', data, '#28a745', 'clanPoints'),
-    renderChart('clanLevelChart', 'Clan Level', data, '#ffc107', 'clanLevel'),
     renderChart('capitalPointsChart', 'Capital Points', data, '#dc3545', 'clanCapitalPoints'),
   ];
 
@@ -92,69 +150,127 @@ async function updateCharts() {
   window.summaryChart = new Chart(summaryCtx, {
     type: 'line',
     data: {
-      labels: getDayLabels(data),
       datasets: [
         { 
           label: 'Members', 
-          data: data.map(d => d.members), 
+          data: data.map(d => ({
+            x: new Date(d.timestamp),
+            y: d.members
+          })), 
           borderColor: '#007bff', 
           fill: false, 
-          tension: 0.2,
-          yAxisID: 'y1'
+          tension: 0.4,
+          yAxisID: 'y1',
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          borderWidth: 2
         },
         { 
           label: 'Clan Points', 
-          data: data.map(d => d.clanPoints), 
+          data: data.map(d => ({
+            x: new Date(d.timestamp),
+            y: d.clanPoints
+          })), 
           borderColor: '#28a745', 
           fill: false, 
-          tension: 0.2,
-          yAxisID: 'y2'
+          tension: 0.4,
+          yAxisID: 'y2',
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          borderWidth: 2
         },
         { 
           label: 'Clan Level', 
-          data: data.map(d => d.clanLevel), 
+          data: data.map(d => ({
+            x: new Date(d.timestamp),
+            y: d.clanLevel
+          })), 
           borderColor: '#ffc107', 
           fill: false, 
-          tension: 0.2,
-          yAxisID: 'y1'
+          tension: 0.4,
+          yAxisID: 'y1',
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          borderWidth: 2
         },
         { 
           label: 'Capital Points', 
-          data: data.map(d => d.clanCapitalPoints), 
+          data: data.map(d => ({
+            x: new Date(d.timestamp),
+            y: d.clanCapitalPoints
+          })), 
           borderColor: '#dc3545', 
           fill: false, 
-          tension: 0.2,
-          yAxisID: 'y2'
+          tension: 0.4,
+          yAxisID: 'y2',
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          borderWidth: 2
         }
       ]
     },
     options: {
       responsive: true,
+      maintainAspectRatio: false,
       plugins: { 
-        legend: { position: 'top' }, 
-        tooltip: { mode: 'index', intersect: false }
+        legend: { 
+          position: 'top',
+          labels: {
+            boxWidth: 20,
+            padding: 20
+          }
+        }, 
+        tooltip: { 
+          mode: 'index', 
+          intersect: false,
+          callbacks: {
+            title: function(tooltipItems) {
+              return moment(tooltipItems[0].parsed.x).format('MMM D, YYYY');
+            }
+          }
+        }
       },
       scales: {
+        x: {
+          type: 'time',
+          time: {
+            unit: 'day',
+            displayFormats: {
+              day: 'MMM D'
+            }
+          },
+          title: {
+            display: true,
+            text: 'Date'
+          },
+          grid: {
+            display: true,
+            drawOnChartArea: true
+          }
+        },
         y1: { 
           type: 'linear',
           display: true,
           position: 'left',
           title: { display: true, text: 'Members & Level' },
-          grid: { color: '#ddd' },
-          beginAtZero: true
+          beginAtZero: true,
+          grid: {
+            drawOnChartArea: true
+          }
         },
         y2: { 
           type: 'linear',
           display: true,
           position: 'right',
           title: { display: true, text: 'Points' },
-          grid: { display: false },
-          beginAtZero: true
-        },
-        x: { 
-          title: { display: true, text: 'Date' }, 
-          grid: { color: '#ddd' } 
+          beginAtZero: true,
+          grid: { 
+            display: false 
+          }
         }
+      },
+      animation: {
+        duration: 750
       }
     }
   });

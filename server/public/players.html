@@ -4,7 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Player War Stats - Clash of Clans Tracker</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.1/dist/chartjs-adapter-moment.min.js"></script>
 <link rel="stylesheet" href="styles.css"> 
 </head>
 <body>
@@ -228,34 +230,78 @@ function renderCharts(data) {
     // Clear any existing charts
     Object.values(charts).forEach(chart => chart && chart.destroy());
     
-    // Initialize labels for all charts
-    const labels = data.map(d => new Date(d.timestamp).toLocaleDateString());
-
   // War Stars Chart
   charts.warStars = new Chart(document.getElementById('warStarsChart'), {
     type: 'line',
     data: {
-      labels,
       datasets: [{
         label: 'War Stars',
-        data: data.map(d => d.warStars),
+        data: data.map(d => ({
+          x: new Date(d.timestamp),
+          y: d.warStars
+        })),
         borderColor: '#ffc107',
         backgroundColor: 'rgba(255, 193, 7, 0.1)',
         fill: true,
         tension: 0.4,
-        borderWidth: 2
+        borderWidth: 2,
+        pointRadius: 3,
+        pointHoverRadius: 5
       }]
     },
     options: {
       responsive: true,
-      maintainAspectRatio: true,
+      maintainAspectRatio: false,
       plugins: {
-        legend: { display: true, position: 'top' },
-        tooltip: { mode: 'index', intersect: false }
+        legend: { 
+          display: true, 
+          position: 'top',
+          labels: {
+            boxWidth: 20,
+            padding: 20
+          }
+        },
+        tooltip: { 
+          mode: 'index', 
+          intersect: false,
+          callbacks: {
+            title: function(tooltipItems) {
+              return moment(tooltipItems[0].parsed.x).format('MMM D, YYYY');
+            }
+          }
+        }
       },
       scales: {
-        y: { beginAtZero: true, title: { display: true, text: 'Total Stars' } },
-        x: { title: { display: true, text: 'Date' } }
+        x: {
+          type: 'time',
+          time: {
+            unit: 'day',
+            displayFormats: {
+              day: 'MMM D'
+            }
+          },
+          title: {
+            display: true,
+            text: 'Date'
+          },
+          grid: {
+            display: true,
+            drawOnChartArea: true
+          }
+        },
+        y: { 
+          beginAtZero: true, 
+          title: { 
+            display: true, 
+            text: 'Total Stars' 
+          },
+          grid: {
+            drawOnChartArea: true
+          }
+        }
+      },
+      animation: {
+        duration: 750
       }
     }
   });
@@ -264,88 +310,235 @@ function renderCharts(data) {
   charts.wins = new Chart(document.getElementById('winsChart'), {
     type: 'line',
     data: {
-      labels,
       datasets: [
         {
           label: 'Attack Wins',
-          data: data.map(d => d.attackWins),
+          data: data.map(d => ({
+            x: new Date(d.timestamp),
+            y: d.attackWins
+          })),
           borderColor: '#28a745',
           backgroundColor: 'rgba(40, 167, 69, 0.1)',
           fill: true,
           tension: 0.4,
-          borderWidth: 2
+          borderWidth: 2,
+          pointRadius: 3,
+          pointHoverRadius: 5
         },
         {
           label: 'Defense Wins',
-          data: data.map(d => d.defenseWins),
+          data: data.map(d => ({
+            x: new Date(d.timestamp),
+            y: d.defenseWins
+          })),
           borderColor: '#dc3545',
           backgroundColor: 'rgba(220, 53, 69, 0.1)',
           fill: true,
           tension: 0.4,
-          borderWidth: 2
+          borderWidth: 2,
+          pointRadius: 3,
+          pointHoverRadius: 5
         }
       ]
     },
     options: {
       responsive: true,
-      maintainAspectRatio: true,
+      maintainAspectRatio: false,
       plugins: {
-        legend: { display: true, position: 'top' },
-        tooltip: { mode: 'index', intersect: false }
+        legend: { 
+          display: true, 
+          position: 'top',
+          labels: {
+            boxWidth: 20,
+            padding: 20
+          }
+        },
+        tooltip: { 
+          mode: 'index', 
+          intersect: false,
+          callbacks: {
+            title: function(tooltipItems) {
+              return moment(tooltipItems[0].parsed.x).format('MMM D, YYYY');
+            }
+          }
+        }
       },
       scales: {
-        y: { beginAtZero: true, title: { display: true, text: 'Total Wins' } },
-        x: { title: { display: true, text: 'Date' } }
+        x: {
+          type: 'time',
+          time: {
+            unit: 'day',
+            displayFormats: {
+              day: 'MMM D'
+            }
+          },
+          title: {
+            display: true,
+            text: 'Date'
+          },
+          grid: {
+            display: true,
+            drawOnChartArea: true
+          }
+        },
+        y: { 
+          beginAtZero: true, 
+          title: { 
+            display: true, 
+            text: 'Total Wins' 
+          },
+          grid: {
+            drawOnChartArea: true
+          }
+        }
+      },
+      animation: {
+        duration: 750
       }
     }
   });
   
-  // Donations Chart (Stacked Bar)
+  // Donations Chart (Line chart for better visibility with time scale)
   charts.donations = new Chart(document.getElementById('donationsChart'), {
-    type: 'bar',
+    type: 'line',
     data: {
-      labels,
       datasets: [
         {
           label: 'Donations Given',
-          data: data.map(d => d.donations),
-          backgroundColor: 'rgba(0, 123, 255, 0.7)',
-          borderColor: '#007bff',
-          borderWidth: 1
+          data: data.map(d => ({
+            x: new Date(d.timestamp),
+            y: d.donations
+          })),
+          backgroundColor: 'rgba(0, 191, 255, 0.2)',
+          borderColor: '#00BFFF',
+          borderWidth: 3,
+          fill: true,
+          tension: 0.4,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointBackgroundColor: '#00BFFF',
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2
         },
         {
           label: 'Donations Received',
-          data: data.map(d => d.donationsReceived),
-          backgroundColor: 'rgba(108, 117, 125, 0.7)',
-          borderColor: '#6c757d',
-          borderWidth: 1
+          data: data.map(d => ({
+            x: new Date(d.timestamp),
+            y: d.donationsReceived
+          })),
+          backgroundColor: 'rgba(255, 99, 71, 0.2)',
+          borderColor: '#FF6347',
+          borderWidth: 3,
+          fill: true,
+          tension: 0.4,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointBackgroundColor: '#FF6347',
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2
         }
       ]
     },
     options: {
       responsive: true,
-      maintainAspectRatio: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false
+      },
       plugins: {
-        legend: { display: true, position: 'top' },
-        tooltip: { mode: 'index', intersect: false }
+        legend: { 
+          display: true, 
+          position: 'top',
+          labels: {
+            boxWidth: 20,
+            padding: 20,
+            usePointStyle: true,
+            font: {
+              size: 13,
+              weight: 'bold'
+            }
+          }
+        },
+        tooltip: { 
+          mode: 'index', 
+          intersect: false,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          padding: 12,
+          titleFont: {
+            size: 14,
+            weight: 'bold'
+          },
+          bodyFont: {
+            size: 13
+          },
+          callbacks: {
+            title: function(tooltipItems) {
+              return moment(tooltipItems[0].parsed.x).format('MMM D, YYYY');
+            },
+            label: function(context) {
+              return context.dataset.label + ': ' + context.parsed.y.toLocaleString();
+            }
+          }
+        }
       },
       scales: {
-        y: { beginAtZero: true, title: { display: true, text: 'Total Donations' } },
-        x: { title: { display: true, text: 'Date' } }
+        x: {
+          type: 'time',
+          time: {
+            unit: 'day',
+            displayFormats: {
+              day: 'MMM D'
+            }
+          },
+          title: {
+            display: true,
+            text: 'Date',
+            font: {
+              size: 13,
+              weight: 'bold'
+            }
+          },
+          grid: {
+            display: true,
+            drawOnChartArea: true
+          }
+        },
+        y: { 
+          beginAtZero: true, 
+          title: { 
+            display: true, 
+            text: 'Total Donations',
+            font: {
+              size: 13,
+              weight: 'bold'
+            }
+          },
+          grid: {
+            drawOnChartArea: true
+          },
+          ticks: {
+            callback: function(value) {
+              return value.toLocaleString();
+            }
+          }
+        }
+      },
+      animation: {
+        duration: 750
       }
     }
   });
   
   // Donation Ratio Chart
-  const donationRatios = data.map(d => {
-    if (d.donationsReceived === 0) return d.donations;
-    return (d.donations / d.donationsReceived).toFixed(2);
-  });
+  const donationRatios = data.map(d => ({
+    x: new Date(d.timestamp),
+    y: d.donationsReceived === 0 ? d.donations : parseFloat((d.donations / d.donationsReceived).toFixed(2))
+  }));
   
   charts.donationRatio = new Chart(document.getElementById('donationRatioChart'), {
     type: 'line',
     data: {
-      labels,
       datasets: [{
         label: 'Donation Ratio (Given/Received)',
         data: donationRatios,
@@ -353,18 +546,30 @@ function renderCharts(data) {
         backgroundColor: 'rgba(102, 16, 242, 0.1)',
         fill: true,
         tension: 0.4,
-        borderWidth: 2
+        borderWidth: 2,
+        pointRadius: 3,
+        pointHoverRadius: 5
       }]
     },
     options: {
       responsive: true,
-      maintainAspectRatio: true,
+      maintainAspectRatio: false,
       plugins: {
-        legend: { display: true, position: 'top' },
+        legend: { 
+          display: true, 
+          position: 'top',
+          labels: {
+            boxWidth: 20,
+            padding: 20
+          }
+        },
         tooltip: { 
           mode: 'index', 
           intersect: false,
           callbacks: {
+            title: function(tooltipItems) {
+              return moment(tooltipItems[0].parsed.x).format('MMM D, YYYY');
+            },
             label: function(context) {
               return `Ratio: ${context.parsed.y} (Higher = More Generous)`;
             }
@@ -372,16 +577,41 @@ function renderCharts(data) {
         }
       },
       scales: {
+        x: {
+          type: 'time',
+          time: {
+            unit: 'day',
+            displayFormats: {
+              day: 'MMM D'
+            }
+          },
+          title: {
+            display: true,
+            text: 'Date'
+          },
+          grid: {
+            display: true,
+            drawOnChartArea: true
+          }
+        },
         y: { 
           beginAtZero: true, 
-          title: { display: true, text: 'Ratio (>1 = Net Giver)' },
+          title: { 
+            display: true, 
+            text: 'Ratio (>1 = Net Giver)' 
+          },
           ticks: {
             callback: function(value) {
               return value.toFixed(2);
             }
+          },
+          grid: {
+            drawOnChartArea: true
           }
-        },
-        x: { title: { display: true, text: 'Date' } }
+        }
+      },
+      animation: {
+        duration: 750
       }
     }
   });
@@ -389,69 +619,130 @@ function renderCharts(data) {
   // Growth Chart (change from baseline)
   if (data.length > 0) {
     const baseline = data[0];
-    const growthData = data.map(d => ({
-      warStars: d.warStars - baseline.warStars,
-      attackWins: d.attackWins - baseline.attackWins,
-      defenseWins: d.defenseWins - baseline.defenseWins,
-      donations: d.donations - baseline.donations
-    }));
     
     charts.growth = new Chart(document.getElementById('growthChart'), {
       type: 'line',
       data: {
-        labels,
         datasets: [
           {
             label: 'War Stars Growth',
-            data: growthData.map(d => d.warStars),
+            data: data.map(d => ({
+              x: new Date(d.timestamp),
+              y: d.warStars - baseline.warStars
+            })),
             borderColor: '#ffc107',
             backgroundColor: 'rgba(255, 193, 7, 0.1)',
             fill: false,
             tension: 0.4,
-            borderWidth: 2
+            borderWidth: 2,
+            pointRadius: 3,
+            pointHoverRadius: 5
           },
           {
             label: 'Attack Wins Growth',
-            data: growthData.map(d => d.attackWins),
+            data: data.map(d => ({
+              x: new Date(d.timestamp),
+              y: d.attackWins - baseline.attackWins
+            })),
             borderColor: '#28a745',
             backgroundColor: 'rgba(40, 167, 69, 0.1)',
             fill: false,
             tension: 0.4,
-            borderWidth: 2
+            borderWidth: 2,
+            pointRadius: 3,
+            pointHoverRadius: 5
           },
           {
             label: 'Defense Wins Growth',
-            data: growthData.map(d => d.defenseWins),
+            data: data.map(d => ({
+              x: new Date(d.timestamp),
+              y: d.defenseWins - baseline.defenseWins
+            })),
             borderColor: '#dc3545',
             backgroundColor: 'rgba(220, 53, 69, 0.1)',
             fill: false,
             tension: 0.4,
-            borderWidth: 2
+            borderWidth: 2,
+            pointRadius: 3,
+            pointHoverRadius: 5
           },
           {
             label: 'Donations Growth',
-            data: growthData.map(d => d.donations),
+            data: data.map(d => ({
+              x: new Date(d.timestamp),
+              y: d.donations - baseline.donations
+            })),
             borderColor: '#007bff',
             backgroundColor: 'rgba(0, 123, 255, 0.1)',
             fill: false,
             tension: 0.4,
-            borderWidth: 2
+            borderWidth: 2,
+            pointRadius: 3,
+            pointHoverRadius: 5
           }
         ]
       },
       options: {
         responsive: true,
-        maintainAspectRatio: true,
+        maintainAspectRatio: false,
         plugins: {
-          legend: { display: true, position: 'top' },
-          tooltip: { mode: 'index', intersect: false }
+          legend: { 
+            display: true, 
+            position: 'top',
+            labels: {
+              boxWidth: 20,
+              padding: 20
+            }
+          },
+          tooltip: { 
+            mode: 'index', 
+            intersect: false,
+            callbacks: {
+              title: function(tooltipItems) {
+                return moment(tooltipItems[0].parsed.x).format('MMM D, YYYY');
+              },
+              label: function(context) {
+                return context.dataset.label + ': +' + Math.round(context.parsed.y).toLocaleString();
+              }
+            }
+          }
         },
         scales: {
+          x: {
+            type: 'time',
+            time: {
+              unit: 'day',
+              displayFormats: {
+                day: 'MMM D'
+              }
+            },
+            title: {
+              display: true,
+              text: 'Date'
+            },
+            grid: {
+              display: true,
+              drawOnChartArea: true
+            }
+          },
           y: { 
             beginAtZero: true, 
-            title: { display: true, text: 'Change from Start' }
-          },
-          x: { title: { display: true, text: 'Date' } }
+            title: { 
+              display: true, 
+              text: 'Change from Start' 
+            },
+            ticks: {
+              callback: function(value) {
+                return '+' + value.toLocaleString();
+              }
+            },
+            grid: {
+              drawOnChartArea: true
+            }
+          }
+        },
+        animation: {
+          duration: 750
         }
       }
     });

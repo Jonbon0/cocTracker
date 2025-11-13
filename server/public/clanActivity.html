@@ -212,7 +212,7 @@ async function calculatePlayerActivity(player, days) {
 
   // Calculate activity score (increased war stars weight)
   const activityScore = Math.round(
-    (warStarsGained * 100) +        // War stars are worth 50 points each
+    (warStarsGained * 100) +        // War stars are worth 100 points each
     (donationsMade)          // Every 1 donation is worth 1 point
   );
 
